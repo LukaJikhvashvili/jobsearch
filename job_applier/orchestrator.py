@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 from typing import Optional
 
 import dotenv
@@ -24,8 +23,8 @@ from .browser import create_driver
 from .cv_parser import load_cv
 from .form_filler import click_element, fill_form
 from .models import CVData, FormMapping, SubmissionResult
-from .page_analyzer import analyze_page, search_in_iframes, snapshot_page
-from .verifier import PageState, capture_state, verify_submission
+from .page_analyzer import analyze_page, search_in_iframes
+from .verifier import capture_state, verify_submission
 
 log = logging.getLogger(__name__)
 

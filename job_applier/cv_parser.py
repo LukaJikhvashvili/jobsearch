@@ -10,10 +10,8 @@ load_cv(file_path)          →  CVData   (convenience wrapper)
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 from .ai_client import ai_json
 from .models import CVData
