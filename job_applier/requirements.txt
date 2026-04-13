@@ -1,14 +1,16 @@
 # Core AI providers (install the one(s) you use)
-anthropic>=0.40.0           # recommended — Claude claude-sonnet-4-20250514
-google-genai>=0.8.0         # optional fallback — Gemini 2.0 Flash
+anthropic           # recommended — Claude claude-sonnet-4-20250514
+google-genai         # optional fallback — Gemini 2.0 Flash
 
 # Browser automation
-selenium>=4.20.0
-webdriver-manager>=4.0.0
+selenium
+webdriver-manager
 
 # CV/resume parsing
-pypdf>=4.0.0
-python-docx>=1.1.0
+pypdf
+python-docx
 
 # Utilities
-python-dotenv>=1.0.0
+python-dotenv
+
+pandas
