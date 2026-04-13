@@ -7,7 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException
 
 # Keywords for filtering relevant jobs
 KEYWORDS = [
@@ -63,13 +63,39 @@ def get_job_metadata(driver: webdriver.Chrome) -> dict:
     return metadata
 
 
-def get_job_application(driver: webdriver.Chrome) -> str:
-    """Extract job description text."""
+def get_job_description_text(driver: webdriver.Chrome) -> str:
+    """Helper function to extract description text from the current job page."""
     try:
-        description = driver.find_element(By.XPATH, "//div[@id='job']//table[2]//tbody/tr[last()]")
+        description = driver.find_element(By.XPATH, "//div[@id='job']//table[2]/tbody/tr[last()]")
         return description.text.strip() if description else "Description not found"
     except NoSuchElementException:
         return "Description not found"
+
+
+def get_job_application(driver: webdriver.Chrome) -> str:
+    """Detect and follow the Georgian version link if available, then extract description."""
+    try:
+        wait = WebDriverWait(driver, 10)
+        wait.until(EC.presence_of_element_located((By.ID, "job")))
+        
+        job_container = driver.find_element(By.XPATH, "//div[@id='job']//table[2]/tbody/tr[last()]")
+
+        # Check if there is a link to the Georgian version
+        try:
+            # Often link text is 'Georgian' when on the English page
+            georgian_link = job_container.find_element(By.XPATH, ".//a[text()='Georgian']")
+            georgian_url = georgian_link.get_attribute("href")
+
+            if georgian_url:
+                driver.get(georgian_url)
+                wait.until(EC.presence_of_element_located((By.ID, "job")))
+        except NoSuchElementException:
+            # Link not found, stay on the current (English) version
+            pass
+
+        return get_job_description_text(driver)
+    except Exception as e:
+        return f"Description extraction failed: {e}"
 
 
 def scrape_jobs(headless=True):
