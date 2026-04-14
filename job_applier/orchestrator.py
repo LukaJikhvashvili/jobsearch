@@ -66,8 +66,8 @@ def apply(
     *,
     auto_submit: bool = False,
     headless: bool = True,
-    wait_for_load: float = 4.0,
-    generate_cover_letter: bool = True,
+    wait_for_load: float = 10.0,
+    generate_cover_letter: bool = False,
     job_description: str = "",
     verify: bool = True,
 ) -> SubmissionResult:
@@ -116,6 +116,8 @@ def apply(
         while step < MAX_STEPS:
             step += 1
             log.info("── Step %d ──────────────────────────", step)
+            log.debug("Current URL before mapping: %s", driver.current_url)
+            #log.debug("Page source before mapping: %s", driver.page_source[:500]) # Log first 500 chars
 
             mapping = _get_mapping(driver, cv)
 

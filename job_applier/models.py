@@ -24,6 +24,7 @@ class CVData:
     years_of_experience: str = ""
     education: str = ""
     cover_letter: str = ""  # AI-generated when needed
+    file_path: str = "" # Path to the original CV file for cache validation
 
     # ---- helpers ----
 

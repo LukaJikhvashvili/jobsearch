@@ -14,7 +14,9 @@ import json
 import logging
 import os
 from typing import Any, Dict, Optional
+import dotenv
 
+dotenv.load_dotenv()
 log = logging.getLogger(__name__)
 
 
@@ -63,7 +65,7 @@ class _AnthropicProvider:
         return response.content[0].text
 
     def complete_json(self, prompt: str, *, system: str = "", max_tokens: int = 2048) -> Dict[str, Any]:
-        json_hint = "\n\nRespond with ONLY valid JSON. No markdown fences, no extra text."
+        json_hint = "Respond with ONLY valid JSON. No markdown fences, no extra text."
         text = self.complete(prompt + json_hint, system=system, max_tokens=max_tokens)
         return _parse_json_response(text)
 
@@ -71,7 +73,7 @@ class _AnthropicProvider:
 class _GeminiProvider:
     """Thin wrapper around the Google GenAI SDK."""
 
-    MODEL = "gemini-3.0-flash-preview"
+    MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
     def __init__(self, api_key: str) -> None:
         from google import genai  # local import
@@ -83,14 +85,14 @@ class _GeminiProvider:
     def complete(self, prompt: str, *, system: str = "", max_tokens: int = 2048) -> str:
         contents = prompt
         if system:
-            contents = f"{system}\n\n{prompt}"
+            contents = f"{system}{prompt}"
         response = self._client.models.generate_content(model=self.MODEL, contents=contents)
         return response.text
 
     def complete_json(self, prompt: str, *, system: str = "", max_tokens: int = 2048) -> Dict[str, Any]:
         contents = prompt
         if system:
-            contents = f"{system}\n\n{prompt}"
+            contents = f"{system}{prompt}"
         try:
             response = self._client.models.generate_content(
                 model=self.MODEL,

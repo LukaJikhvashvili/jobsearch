@@ -18,13 +18,15 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+
 
 # Load environment variables from .env file
 dotenv.load_dotenv()
 
 # Configure Gemini Client
 API_KEY = os.getenv("GEMINI_API_KEY")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 if API_KEY:
     client = genai.Client(api_key=API_KEY)
 else:
@@ -65,7 +67,7 @@ def get_cv_data(cv_text: str) -> Dict[str, str]:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -74,7 +76,7 @@ def get_cv_data(cv_text: str) -> Dict[str, str]:
         print(f"Error parsing Gemini response for CV data: {e}")
         # Fallback to older method if JSON mode fails or is unsupported
         try:
-            response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+            response = client.models.generate_content(model=MODEL, contents=prompt)
             text = response.text.strip()
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0].strip()
@@ -154,7 +156,7 @@ def get_form_mapping(driver, cv_data: Dict[str, str]) -> Dict[str, Any]:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
