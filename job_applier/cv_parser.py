@@ -11,12 +11,18 @@ load_cv(file_path)          →  CVData   (convenience wrapper)
 from __future__ import annotations
 
 import logging
+import json
 from pathlib import Path
 
 from .ai_client import ai_json
 from .models import CVData
 
 log = logging.getLogger(__name__)
+
+# Cache settings
+CV_CACHE_DIR = Path(".gemini_cache")
+CV_CACHE_FILE = CV_CACHE_DIR / "parsed_cv.json"
+
 
 
 # ---------------------------------------------------------------------------
@@ -176,9 +182,10 @@ def get_ai_client_text(prompt: str) -> str:
     return ai_complete(prompt, max_tokens=600)
 
 
-def load_cv(file_path: str, generate_cover_letter_flag: bool = True) -> CVData:
+def load_cv(file_path: str, generate_cover_letter_flag: bool = False, use_cache: bool = True) -> CVData:
     """
     End-to-end helper: extract text from file, parse with AI, optionally draft a cover letter.
+    Supports caching of parsed CV data.
 
     Parameters
     ----------
@@ -186,17 +193,48 @@ def load_cv(file_path: str, generate_cover_letter_flag: bool = True) -> CVData:
         Path to .pdf or .docx resume.
     generate_cover_letter_flag : bool
         If True (default), a cover letter is auto-generated and stored in cv.cover_letter.
+    use_cache : bool
+        If True (default), attempts to load CV data from a cache file first.
+        If not found or parsing is required, saves the result to cache.
 
     Returns
     -------
     CVData
         Fully populated CVData instance.
     """
-    log.info("Extracting text from %s", file_path)
-    text = extract_cv_text(file_path)
+    cv = CVData()
+    if use_cache and CV_CACHE_FILE.exists():
+        try:
+            log.info("Loading CV data from cache: %s", CV_CACHE_FILE)
+            cached_data = json.loads(CV_CACHE_FILE.read_text())
+            cv = CVData.from_dict(cached_data)
+            log.info("CV data loaded from cache.")
+            # If the original file_path is different from the one stored in cache, re-parse.
+            # This is a simple check; more robust might involve file hash.
+            if Path(file_path).resolve() != Path(cv.file_path).resolve():
+                log.warning("Cached CV data is for a different file path. Reparsing.")
+                cv = CVData() # Reset to re-parse
+            else:
+                return cv
+        except Exception as exc:
+            log.warning("Failed to load CV data from cache: %s. Reparsing.", exc)
+            cv = CVData() # Reset to re-parse
 
-    log.info("Parsing CV data with AI…")
-    cv = parse_cv_data(text)
+    if not cv.full_name: # Check if CV data is still empty after cache attempt
+        log.info("Extracting text from %s", file_path)
+        text = extract_cv_text(file_path)
+
+        log.info("Parsing CV data with AI…")
+        cv = parse_cv_data(text)
+        cv.file_path = str(Path(file_path).resolve()) # Store resolved path
+
+        if use_cache:
+            try:
+                CV_CACHE_DIR.mkdir(exist_ok=True)
+                CV_CACHE_FILE.write_text(json.dumps(cv.to_dict(), indent=2))
+                log.info("CV data saved to cache: %s", CV_CACHE_FILE)
+            except Exception as exc:
+                log.warning("Failed to save CV data to cache: %s", exc)
 
     if generate_cover_letter_flag and not cv.cover_letter:
         log.info("Generating cover letter…")

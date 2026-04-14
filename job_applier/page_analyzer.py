@@ -30,111 +30,145 @@ log = logging.getLogger(__name__)
 # JavaScript DOM snapshot
 # ---------------------------------------------------------------------------
 
-_DOM_SNAPSHOT_JS = """
+_DOM_SNAPSHOT_JS = r"""
 (function() {
+  "use strict";
+ 
+  function cssEscape(s) {
+    try {
+      if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(s);
+    } catch(e) {}
+    return String(s).replace(/([^\w\-])/g, '\\$1');
+  }
+ 
   function getLabel(el) {
-    // aria-label
-    var al = el.getAttribute('aria-label');
-    if (al && al.trim()) return al.trim();
-    // aria-labelledby
-    var alby = el.getAttribute('aria-labelledby');
-    if (alby) {
-      var labelEl = document.getElementById(alby);
-      if (labelEl) return labelEl.textContent.trim();
-    }
-    // <label for="id">
-    if (el.id) {
-      var lbl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-      if (lbl) return lbl.textContent.trim();
-    }
-    // parent <label> or closest .form-group label
-    var p = el.parentElement;
-    for (var depth = 0; depth < 6 && p; depth++) {
-      if (p.tagName === 'LABEL') return p.textContent.replace(el.value||'','').trim();
-      var innerLbl = p.querySelector('label');
-      if (innerLbl && !innerLbl.contains(el)) return innerLbl.textContent.trim();
-      if (['FORM','BODY','HTML'].includes(p.tagName)) break;
-      p = p.parentElement;
-    }
-    // title / placeholder fallback
-    return el.getAttribute('title') || el.getAttribute('placeholder') || '';
-  }
-
-  function getSelector(el) {
-    if (el.id) return '#' + el.id;
-    if (el.getAttribute('name'))
-      return el.tagName.toLowerCase() + '[name="' + el.getAttribute('name') + '"]';
-    // data-testid / data-cy / data-qa
-    for (var attr of ['data-testid','data-cy','data-qa','data-id']) {
-      var v = el.getAttribute(attr);
-      if (v) return el.tagName.toLowerCase() + '[' + attr + '="' + v + '"]';
-    }
-    // fallback: path of nth-of-type
-    var path = [];
-    var cur = el;
-    for (var d = 0; d < 5 && cur && cur.tagName; d++) {
-      var tag = cur.tagName.toLowerCase();
-      var siblings = cur.parentElement
-        ? Array.from(cur.parentElement.children).filter(c => c.tagName === cur.tagName)
-        : [];
-      if (siblings.length > 1) {
-        path.unshift(tag + ':nth-of-type(' + (siblings.indexOf(cur)+1) + ')');
-      } else {
-        path.unshift(tag);
+    try {
+      var al = el.getAttribute('aria-label');
+      if (al && al.trim()) return al.trim();
+ 
+      var alby = el.getAttribute('aria-labelledby');
+      if (alby) {
+        var lbEl = document.getElementById(alby);
+        if (lbEl) return lbEl.textContent.trim();
       }
-      cur = cur.parentElement;
-    }
-    return path.join(' > ');
+ 
+      if (el.id) {
+        var lbl = document.querySelector('label[for="' + cssEscape(el.id) + '"]');
+        if (lbl) return lbl.textContent.trim();
+      }
+ 
+      var p = el.parentElement;
+      for (var depth = 0; depth < 6 && p; depth++) {
+        if (p.tagName === 'LABEL') return p.textContent.replace(el.value || '', '').trim();
+        var innerLbl = p.querySelector('label');
+        if (innerLbl && !innerLbl.contains(el)) return innerLbl.textContent.trim();
+        if (p.tagName === 'FORM' || p.tagName === 'BODY' || p.tagName === 'HTML') break;
+        p = p.parentElement;
+      }
+      return el.getAttribute('title') || el.getAttribute('placeholder') || '';
+    } catch(e) { return ''; }
   }
-
-  var seen = new Set();
-  var results = [];
-  var nodes = document.querySelectorAll(
-    'input:not([type="hidden"]), textarea, select, ' +
-    'button, [role="button"], [type="submit"], [role="checkbox"], [role="radio"]'
-  );
-
-  nodes.forEach(function(el, i) {
-    var type = (el.getAttribute('type') || el.tagName).toLowerCase();
-    var isFile = el.tagName === 'INPUT' && type === 'file';
-    var rect = el.getBoundingClientRect();
-    var visible = isFile || (rect.width > 0 && rect.height > 0 &&
-                              window.getComputedStyle(el).visibility !== 'hidden' &&
-                              window.getComputedStyle(el).display !== 'none');
-    if (!visible) return;
-
-    var sel = getSelector(el);
-    if (seen.has(sel)) return;
-    seen.add(sel);
-
-    var opts = [];
-    if (el.tagName === 'SELECT') {
-      opts = Array.from(el.options).map(o => o.text.trim()).filter(Boolean);
+ 
+  function getSelector(el) {
+    try {
+      if (el.id) return '#' + cssEscape(el.id);
+ 
+      var name = el.getAttribute('name');
+      if (name) return el.tagName.toLowerCase() + '[name="' + name + '"]';
+ 
+      var testAttrs = ['data-testid', 'data-cy', 'data-qa', 'data-id'];
+      for (var ai = 0; ai < testAttrs.length; ai++) {
+        var av = el.getAttribute(testAttrs[ai]);
+        if (av) return el.tagName.toLowerCase() + '[' + testAttrs[ai] + '="' + av + '"]';
+      }
+ 
+      var path = [];
+      var cur = el;
+      for (var d = 0; d < 5 && cur && cur.tagName; d++) {
+        var tag = cur.tagName.toLowerCase();
+        var siblings = cur.parentElement
+          ? Array.prototype.filter.call(cur.parentElement.children, function(c) {
+              return c.tagName === cur.tagName;
+            })
+          : [];
+        if (siblings.length > 1) {
+          path.unshift(tag + ':nth-of-type(' + (siblings.indexOf(cur) + 1) + ')');
+        } else {
+          path.unshift(tag);
+        }
+        cur = cur.parentElement;
+      }
+      return path.join(' > ');
+    } catch(e) { return ''; }
+  }
+ 
+  try {
+    var seen = {};
+    var results = [];
+    var nodes = document.querySelectorAll(
+      'input:not([type="hidden"]), textarea, select, ' +
+      'button, [role="button"], [type="submit"], [role="checkbox"], [role="radio"]'
+    );
+ 
+    for (var ni = 0; ni < nodes.length; ni++) {
+      (function(el, i) {
+        try {
+          var type = (el.getAttribute('type') || el.tagName).toLowerCase();
+          var isFile = (el.tagName === 'INPUT' && type === 'file');
+ 
+          var rect = el.getBoundingClientRect();
+          var style = window.getComputedStyle(el);
+          var visible = isFile || (
+            rect.width > 0 && rect.height > 0 &&
+            style.visibility !== 'hidden' &&
+            style.display !== 'none'
+          );
+          if (!visible) return;
+ 
+          var sel = getSelector(el);
+          if (!sel || seen[sel]) return;
+          seen[sel] = true;
+ 
+          var opts = [];
+          if (el.tagName === 'SELECT') {
+            for (var oi = 0; oi < el.options.length; oi++) {
+              var ot = el.options[oi].text.trim();
+              if (ot) opts.push(ot);
+            }
+          }
+          if (type === 'radio' && el.getAttribute('name')) {
+            var radios = document.querySelectorAll(
+              'input[type="radio"][name="' + el.getAttribute('name') + '"]'
+            );
+            for (var ri = 0; ri < radios.length; ri++) {
+              if (radios[ri].value) opts.push(radios[ri].value);
+            }
+          }
+ 
+          results.push({
+            index: i,
+            tag: el.tagName.toLowerCase(),
+            type: type,
+            label: getLabel(el),
+            placeholder: el.getAttribute('placeholder') || '',
+            name: el.getAttribute('name') || '',
+            id: el.id || '',
+            required: el.required || el.getAttribute('aria-required') === 'true' || false,
+            value: el.value || '',
+            text: el.textContent.trim().substring(0, 120),
+            options: opts,
+            accept: el.getAttribute('accept') || '',
+            selector: sel,
+            disabled: el.disabled || false
+          });
+        } catch(elemErr) { /* skip bad element */ }
+      })(nodes[ni], ni);
     }
-    // radio group sibling values
-    if (type === 'radio' && el.getAttribute('name')) {
-      document.querySelectorAll('input[type="radio"][name="' + el.getAttribute('name') + '"]')
-        .forEach(r => { if (r.value) opts.push(r.value); });
-    }
-
-    results.push({
-      index: i,
-      tag: el.tagName.toLowerCase(),
-      type: type,
-      label: getLabel(el),
-      placeholder: el.getAttribute('placeholder') || '',
-      name: el.getAttribute('name') || '',
-      id: el.id || '',
-      required: el.required || el.getAttribute('aria-required') === 'true' || false,
-      value: el.value || '',
-      text: el.textContent.trim().substring(0, 120),
-      options: opts,
-      accept: el.getAttribute('accept') || '',
-      selector: sel,
-      disabled: el.disabled || false
-    });
-  });
-  return JSON.stringify(results);
+ 
+    return JSON.stringify(results);
+  } catch(e) {
+    return JSON.stringify([]);
+  }
 })();
 """
 
@@ -146,7 +180,7 @@ _DOM_SNAPSHOT_JS = """
 
 def snapshot_page(driver: Any) -> List[FormField]:
     """
-    Execute the DOM snapshot script and return a list of FormField objects.
+    Find interactive elements using Selenium's API and return a list of FormField objects.
 
     Parameters
     ----------
@@ -157,35 +191,104 @@ def snapshot_page(driver: Any) -> List[FormField]:
     -------
     List[FormField]
     """
-    try:
-        raw = driver.execute_script(_DOM_SNAPSHOT_JS)
-        items: List[Dict] = json.loads(raw)
-    except Exception as exc:
-        log.error("DOM snapshot failed: %s", exc)
-        return []
-
     fields = []
-    for item in items:
-        if item.get("disabled"):
-            continue
-        fields.append(
-            FormField(
-                selector=item["selector"],
-                tag=item["tag"],
-                type=item["type"],
-                label=item.get("label", ""),
-                placeholder=item.get("placeholder", ""),
-                name=item.get("name", ""),
-                id_attr=item.get("id", ""),
-                required=bool(item.get("required", False)),
-                options=item.get("options", []),
-                accept=item.get("accept", ""),
-                text=item.get("text", ""),
-                element_index=item.get("index", 0),
-            )
-        )
+    log.debug("Starting DOM snapshot using Selenium API.")
 
-    log.debug("DOM snapshot: %d interactive elements found", len(fields))
+    # List of common interactive elements to look for
+    interactive_elements_css = [
+        "input:not([type='hidden'])",
+        "textarea",
+        "select",
+        "button",
+        "[role='button']",
+        "[type='submit']",
+        "[role='checkbox']",
+        "[role='radio']"
+    ]
+
+    for css_selector in interactive_elements_css:
+        elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
+        for i, el in enumerate(elements):
+            try:
+                # Check visibility
+                if not el.is_displayed():
+                    continue
+
+                # Basic attributes
+                tag = el.tag_name.lower()
+                el_type = el.get_attribute("type") or tag
+                name = el.get_attribute("name") or ""
+                id_attr = el.get_attribute("id") or ""
+                placeholder = el.get_attribute("placeholder") or ""
+                required = el.get_attribute("required") == "true" or el.get_attribute("aria-required") == "true"
+                accept = el.get_attribute("accept") or ""
+                text = el.text.strip()[:120] if el.text else ""
+
+                # Generate a selector (simplified for now, prioritize ID/Name)
+                selector = ""
+                if id_attr:
+                    selector = f"#{id_attr}"
+                elif name:
+                    selector = f"{tag}[name='{name}']"
+                else:
+                    selector = css_selector # Fallback, might not be unique
+
+                # Options for select/radio
+                options = []
+                if tag == "select":
+                    for option_el in el.find_elements(By.TAG_NAME, "option"):
+                        option_text = option_el.text.strip()
+                        if option_text:
+                            options.append(option_text)
+                elif el_type == "radio" and name:
+                    # For radio buttons, we need to find all with the same name to get options
+                    radio_group = driver.find_elements(By.CSS_SELECTOR, f"input[type='radio'][name='{name}']")
+                    for radio_el in radio_group:
+                        radio_value = radio_el.get_attribute("value")
+                        if radio_value and radio_value not in options:
+                            options.append(radio_value)
+                
+                # Try to get label text. This is tricky with Selenium directly.
+                # For now, we'll try to find a <label> associated by 'for' attribute or parent.
+                label_text = ""
+                if id_attr:
+                    try:
+                        label_el = driver.find_element(By.CSS_SELECTOR, f"label[for='{id_attr}']")
+                        label_text = label_el.text.strip()
+                    except:
+                        pass # No direct label for 'for' attribute
+                
+                if not label_text and el.get_attribute("aria-label"):
+                    label_text = el.get_attribute("aria-label").strip()
+                
+                # Check parent element for label text
+                if not label_text:
+                    parent = el.find_element(By.XPATH, "..")
+                    if parent.tag_name.lower() == 'label':
+                        label_text = parent.text.strip().replace(el.get_attribute("value") or '', '').strip()
+                
+
+                fields.append(
+                    FormField(
+                        selector=selector,
+                        tag=tag,
+                        type=el_type,
+                        label=label_text,
+                        placeholder=placeholder,
+                        name=name,
+                        id_attr=id_attr,
+                        required=required,
+                        options=options,
+                        accept=accept,
+                        text=text,
+                        element_index=i,
+                    )
+                )
+            except Exception as elem_exc:
+                log.warning("Error processing element %s: %s", css_selector, elem_exc)
+                continue
+
+    log.debug("DOM snapshot: %d interactive elements found via Selenium API.", len(fields))
     return fields
 
 
