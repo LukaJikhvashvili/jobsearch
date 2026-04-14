@@ -1,0 +1,34 @@
+# AI Job Application Assistant — Python Dependencies
+# Install: pip install -r requirements.txt
+# Requires Python 3.11+
+
+# Browser automation
+playwright==1.44.0
+playwright-stealth==1.0.6
+
+# Web page cleaning & AI extraction
+crawl4ai==0.3.74
+
+# Gemini LLM
+google-generativeai==0.7.2
+
+# Data validation
+pydantic==2.7.1
+
+# PDF: read base CV
+PyMuPDF==1.24.3         # import as fitz
+
+# PDF: generate tailored CV (ATS-safe)
+reportlab==4.2.0
+
+# Database
+# sqlite3 is in stdlib — no extra package needed
+
+# Env var management
+python-dotenv==1.0.1
+
+# Async utilities
+aiofiles==23.2.1
+
+# Optional: LangGraph orchestration (uncomment if using graph-based flow)
+# langgraph==0.1.5
