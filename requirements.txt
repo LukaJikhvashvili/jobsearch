@@ -3,32 +3,32 @@
 # Requires Python 3.11+
 
 # Browser automation
-playwright==1.44.0
-playwright-stealth==1.0.6
+playwright
+playwright-stealth
 
 # Web page cleaning & AI extraction
-crawl4ai==0.3.74
+crawl4ai
 
 # Gemini LLM
-google-generativeai==0.7.2
+google-generativeai
 
 # Data validation
-pydantic==2.7.1
+pydantic
 
 # PDF: read base CV
-PyMuPDF==1.24.3         # import as fitz
+PyMuPDF         # import as fitz
 
 # PDF: generate tailored CV (ATS-safe)
-reportlab==4.2.0
+reportlab
 
 # Database
 # sqlite3 is in stdlib — no extra package needed
 
 # Env var management
-python-dotenv==1.0.1
+python-dotenv
 
 # Async utilities
-aiofiles==23.2.1
+aiofiles
 
 # Optional: LangGraph orchestration (uncomment if using graph-based flow)
-# langgraph==0.1.5
+langgraph
