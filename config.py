@@ -46,8 +46,8 @@ if not GEMINI_API_KEY:
 # Model selection:
 #   Flash  → fast + cheap  → scraping, scoring, form detection  (most calls)
 #   Pro    → smarter       → CV tailoring only  (1 call per application)
-GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite"
-GEMINI_PRO_MODEL = "gemini-3-flash"
+GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_PRO_MODEL = "gemini-3-flash-preview"
 
 # Free-tier rate limits (requests per minute / per day)
 # Flash: 15 RPM / 1500 RPD  |  Pro: 2 RPM / 50 RPD

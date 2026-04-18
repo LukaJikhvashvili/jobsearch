@@ -18,8 +18,6 @@ Usage:
 import asyncio
 import logging
 import random
-from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Optional
 
 from playwright.async_api import (
@@ -29,7 +27,7 @@ from playwright.async_api import (
     Playwright,
     async_playwright,
 )
-from playwright_stealth import stealth_async
+from playwright_stealth import Stealth
 
 from config import BROWSER, BROWSER_STATE, DELAYS
 
@@ -105,10 +103,7 @@ class BrowserManager:
             slow_mo=BROWSER.slow_mo_ms,
             args=BROWSER.args,
         )
-        logger.info(
-            f"Browser launched | headless={BROWSER.headless} | "
-            f"slow_mo={BROWSER.slow_mo_ms}ms"
-        )
+        logger.info(f"Browser launched | headless={BROWSER.headless} | " f"slow_mo={BROWSER.slow_mo_ms}ms")
 
     async def stop(self) -> None:
         """Close all contexts and the browser cleanly."""
@@ -145,16 +140,14 @@ class BrowserManager:
 
         ctx = await self._browser.new_context(
             viewport={
-                "width":  BROWSER.viewport_width,
+                "width": BROWSER.viewport_width,
                 "height": BROWSER.viewport_height,
             },
             user_agent=BROWSER.user_agent,
             locale=BROWSER.locale,
             timezone_id=BROWSER.timezone,
             # Load saved storage state if it exists (cookies, localStorage)
-            storage_state=str(state_dir / "state.json")
-                if (state_dir / "state.json").exists()
-                else None,
+            storage_state=str(state_dir / "state.json") if (state_dir / "state.json").exists() else None,
         )
 
         # Inject stealth patches on every new page/frame within this context
@@ -177,17 +170,19 @@ class BrowserManager:
         page = await ctx.new_page()
 
         # Apply playwright-stealth (patches fingerprinting APIs)
-        await stealth_async(page)
+        await Stealth().apply_stealth_async(page)
 
         # Small random viewport jitter to vary fingerprint across sessions
         jitter_w = random.randint(-20, 20)
         jitter_h = random.randint(-10, 10)
-        await page.set_viewport_size({
-            "width":  BROWSER.viewport_width  + jitter_w,
-            "height": BROWSER.viewport_height + jitter_h,
-        })
+        await page.set_viewport_size(
+            {
+                "width": BROWSER.viewport_width + jitter_w,
+                "height": BROWSER.viewport_height + jitter_h,
+            }
+        )
 
-        page.set_default_timeout(30_000)       # 30s navigation timeout
+        page.set_default_timeout(30_000)  # 30s navigation timeout
         page.set_default_navigation_timeout(30_000)
 
         logger.debug(f"New page opened in context '{site_name}'")
@@ -226,6 +221,7 @@ class BrowserManager:
 # Human-like Page Actions
 # ---------------------------------------------------------------------------
 
+
 class HumanActions:
     """
     Stateless collection of human-mimicking browser actions.
@@ -255,11 +251,7 @@ class HumanActions:
         await asyncio.sleep(delay)
 
     @staticmethod
-    async def scroll_page(
-        page: Page,
-        scrolls: int = None,
-        direction: str = "down",
-    ) -> None:
+    async def scroll_page(page: Page, scrolls: int = None, direction: str = "down") -> None:
         """
         Scroll the page in chunks, simulating human reading behavior.
 
@@ -283,7 +275,8 @@ class HumanActions:
     @staticmethod
     async def scroll_to_bottom(page: Page) -> None:
         """Scroll all the way to the bottom of the page gradually."""
-        await page.evaluate("""
+        await page.evaluate(
+            """
             () => new Promise(resolve => {
                 let total = document.body.scrollHeight;
                 let current = 0;
@@ -299,7 +292,8 @@ class HumanActions:
                 };
                 step();
             })
-        """)
+        """
+        )
         await asyncio.sleep(1.0)
 
     @staticmethod
@@ -315,7 +309,7 @@ class HumanActions:
             return
 
         # Click slightly off-center
-        x = box["x"] + box["width"]  * random.uniform(0.3, 0.7)
+        x = box["x"] + box["width"] * random.uniform(0.3, 0.7)
         y = box["y"] + box["height"] * random.uniform(0.3, 0.7)
 
         # Move mouse to element first
@@ -325,12 +319,7 @@ class HumanActions:
         await HumanActions.random_delay(0.3, 1.0)
 
     @staticmethod
-    async def human_type(
-        page: Page,
-        selector: str,
-        text: str,
-        clear_first: bool = True,
-    ) -> None:
+    async def human_type(page: Page, selector: str, text: str, clear_first: bool = True) -> None:
         """
         Type text character-by-character at a realistic speed.
         Occasionally makes a typo and corrects it for extra realism.
@@ -351,12 +340,7 @@ class HumanActions:
 
         for i, char in enumerate(text):
             # ~5% chance of a typo on non-special chars
-            if (
-                random.random() < 0.05
-                and char.isalpha()
-                and len(text) > 5
-                and i < len(text) - 1
-            ):
+            if random.random() < 0.05 and char.isalpha() and len(text) > 5 and i < len(text) - 1:
                 # Type a wrong char, then backspace
                 wrong = random.choice("qwertyuiopasdfghjklzxcvbnm")
                 await page.keyboard.type(wrong)
@@ -386,11 +370,7 @@ class HumanActions:
             await asyncio.sleep(random.uniform(0.1, 0.4))
 
     @staticmethod
-    async def safe_goto(
-        page: Page,
-        url: str,
-        wait_until: str = "domcontentloaded",
-    ) -> bool:
+    async def safe_goto(page: Page, url: str, wait_until: str = "domcontentloaded") -> bool:
         """
         Navigate to URL with error handling and post-load delay.
 
@@ -407,11 +387,7 @@ class HumanActions:
             return False
 
     @staticmethod
-    async def wait_for_content(
-        page: Page,
-        selector: str,
-        timeout_ms: int = 15_000,
-    ) -> bool:
+    async def wait_for_content(page: Page, selector: str, timeout_ms: int = 15_000) -> bool:
         """
         Wait for a selector to appear. Returns False instead of raising on timeout.
         """
