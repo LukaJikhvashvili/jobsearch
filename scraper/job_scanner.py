@@ -1,7 +1,7 @@
 """
 scraper/job_scanner.py — Universal job listing scanner.
 
-No CSS selectors. No XPath. 
+No CSS selectors. No XPath.
 Playwright navigates, Crawl4AI cleans, Gemini extracts.
 
 Flow per site:
@@ -59,13 +59,7 @@ class JobScanner:
     # Public entry point
     # ------------------------------------------------------------------
 
-    async def scan(
-        self,
-        site_name: str,
-        query: str,
-        location: str = "",
-        max_pages: int = None,
-    ) -> list[JobListing]:
+    async def scan(self, site_name: str, query: str, location: str = "", max_pages: int = None) -> list[JobListing]:
         """
         Scan a job site and return a deduplicated list of job listings.
 
@@ -79,18 +73,12 @@ class JobScanner:
             List of JobListing objects, deduplicated by link.
         """
         if site_name not in JOB_SITES:
-            raise ValueError(
-                f"Unknown site '{site_name}'. "
-                f"Available: {list(JOB_SITES.keys())}"
-            )
+            raise ValueError(f"Unknown site '{site_name}'. " f"Available: {list(JOB_SITES.keys())}")
 
         site = JOB_SITES[site_name]
         limit = max_pages or site.max_pages
 
-        logger.info(
-            f"[{site.name}] Starting scan | query='{query}' | "
-            f"location='{location}' | max_pages={limit}"
-        )
+        logger.info(f"[{site.name}] Starting scan | query='{query}' | " f"location='{location}' | max_pages={limit}")
 
         # Open page in site-specific context (persistent session)
         page = await self._bm.new_page(site_name)
@@ -133,9 +121,7 @@ class JobScanner:
                 html = await HumanActions.get_page_html(page)
 
                 # Clean with Crawl4AI (specialized for listing pages)
-                markdown = await self._cleaner.clean_for_job_listing(
-                    html, url=current_url
-                )
+                markdown = await self._cleaner.clean_for_job_listing(html, url=current_url)
 
                 if not markdown.strip():
                     logger.warning(f"[{site.name}] Empty Markdown on page {page_num}, stopping.")
@@ -143,11 +129,12 @@ class JobScanner:
 
                 # Extract jobs with Gemini (1 call per page)
                 try:
-                    result: JobListingsPage = await self._gemini.extract_job_listings(
-                        markdown, site_name=site.name
-                    )
+                    result: JobListingsPage = await self._gemini.extract_job_listings(markdown, site_name=site.name)
                 except Exception as e:
-                    logger.error(f"[{site.name}] Gemini extraction failed on page {page_num}: {e}")
+                    import traceback
+
+                    logger.error(f"[{site.name}] Gemini extraction failed on page 1: {e}")
+                    logger.error(traceback.format_exc())
                     break
 
                 # Resolve relative URLs and deduplicate
@@ -190,10 +177,7 @@ class JobScanner:
         finally:
             await self._bm.close_page(page)
 
-        logger.info(
-            f"[{site.name}] Scan complete | "
-            f"{len(all_jobs)} unique jobs found"
-        )
+        logger.info(f"[{site.name}] Scan complete | " f"{len(all_jobs)} unique jobs found")
         return all_jobs
 
     async def scan_multiple_sites(
@@ -299,10 +283,7 @@ class JobScanner:
         This is intentionally manual — automated login is fragile and risks
         account flagging. User does it once; session is reused thereafter.
         """
-        logger.info(
-            f"[{site.name}] Login required. "
-            f"Please log in at {site.login_url} in the browser window."
-        )
+        logger.info(f"[{site.name}] Login required. " f"Please log in at {site.login_url} in the browser window.")
         print(f"\n{'='*60}")
         print(f"[{site.name}] Manual login required.")
         print(f"1. The browser will open {site.login_url}")
@@ -329,5 +310,5 @@ class JobScanner:
 # ---------------------------------------------------------------------------
 # Module-level delay constants (separate from DELAYS config for clarity)
 # ---------------------------------------------------------------------------
-DELAYS_BETWEEN_PAGES_MIN = 5.0   # seconds between pagination requests
+DELAYS_BETWEEN_PAGES_MIN = 5.0  # seconds between pagination requests
 DELAYS_BETWEEN_PAGES_MAX = 12.0

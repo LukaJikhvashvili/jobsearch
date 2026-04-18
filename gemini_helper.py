@@ -504,9 +504,13 @@ class GeminiHelper:
                     contents=prompt,
                     config=config,
                 )
-
-                elapsed = time.monotonic() - t0
-                text = response.text.strip()
+                
+                logger.debug(f"[{label}] Raw response received")
+                text = response.text
+                if not text:
+                    logger.warning(f"[{label}] Empty response text")
+                    text = ""
+                text = text.strip()
 
                 # Track usage (approximate if metadata unavailable)
                 meta = response.usage_metadata

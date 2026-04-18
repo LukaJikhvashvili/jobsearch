@@ -30,21 +30,12 @@ class JobDetailExtractor:
     Works on any site — no site-specific selectors.
     """
 
-    def __init__(
-        self,
-        browser_manager: BrowserManager,
-        gemini: GeminiHelper,
-        cleaner: PageCleaner,
-    ):
+    def __init__(self, browser_manager: BrowserManager, gemini: GeminiHelper, cleaner: PageCleaner):
         self._bm = browser_manager
         self._gemini = gemini
         self._cleaner = cleaner
 
-    async def extract(
-        self,
-        job: JobListing,
-        site_name: str = "default",
-    ) -> JobDetail | None:
+    async def extract(self, job: JobListing, site_name: str = "default") -> JobDetail | None:
         """
         Navigate to job URL and extract full structured details.
 
@@ -112,10 +103,7 @@ class JobDetailExtractor:
         return detail
 
     async def extract_batch(
-        self,
-        jobs: list[JobListing],
-        site_name: str = "default",
-        max_concurrent: int = 1,   # keep at 1 to avoid bans
+        self, jobs: list[JobListing], site_name: str = "default", max_concurrent: int = 1  # keep at 1 to avoid bans
     ) -> list[tuple[JobListing, JobDetail | None]]:
         """
         Extract details for multiple jobs with polite delays between each.

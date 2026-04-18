@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 # These survive even after Crawl4AI cleans the HTML.
 # ---------------------------------------------------------------------------
 _NOISE_PATTERNS = [
-    r"!\[.*?\]\(.*?\)",            # Markdown images (irrelevant)
+    r"!\[.*?\]\(.*?\)",  # Markdown images (irrelevant)
     r"\[cookie[^\]]*\]\([^)]*\)",  # Cookie banner links
-    r"(accept all cookies?.*?\n)", # Cookie consent text
+    r"(accept all cookies?.*?\n)",  # Cookie consent text
     r"(subscribe to.*?newsletter.*?\n)",
     r"(\bjavascript:\S+)",
-    r"(©.*?\d{4}.*?\n)",           # Copyright footers
+    r"(©.*?\d{4}.*?\n)",  # Copyright footers
 ]
 _NOISE_RE = re.compile(
     "|".join(_NOISE_PATTERNS),
@@ -65,34 +65,38 @@ class PageCleaner:
         self._content_filter = PruningContentFilter(
             threshold=0.45,
             threshold_type="fixed",
-            min_word_threshold=10,   # drop blocks with fewer than 10 words
+            min_word_threshold=10,  # drop blocks with fewer than 10 words
         )
         self._md_generator = DefaultMarkdownGenerator(
             content_filter=self._content_filter,
             options={
-                "ignore_links": False,   # keep links (we need job URLs)
-                "body_width": 0,         # no line wrapping
+                "ignore_links": False,  # keep links (we need job URLs)
+                "body_width": 0,  # no line wrapping
             },
         )
         self._config = CrawlerRunConfig(
             markdown_generator=self._md_generator,
             excluded_tags=[
-                "script", "style", "noscript", "iframe",
-                "header", "footer", "nav", "aside",
-                "svg", "canvas", "video", "audio",
+                "script",
+                "style",
+                "noscript",
+                "iframe",
+                "header",
+                "footer",
+                "nav",
+                "aside",
+                "svg",
+                "canvas",
+                "video",
+                "audio",
             ],
-            exclude_external_links=True,    # drop outbound links (noise)
+            exclude_external_links=True,  # drop outbound links (noise)
             exclude_social_media_links=True,
-            remove_overlay_elements=True,   # removes popups/banners
+            remove_overlay_elements=True,  # removes popups/banners
             wait_until="domcontentloaded",
         )
 
-    async def clean_html(
-        self,
-        html: str,
-        url: str = "about:blank",
-        max_chars: Optional[int] = None,
-    ) -> str:
+    async def clean_html(self, html: str, url: str = "about:blank", max_chars: Optional[int] = None) -> str:
         """
         Clean raw HTML string into compact Markdown.
 
@@ -110,7 +114,7 @@ class PageCleaner:
             result = await crawler.arun(
                 url=url,
                 config=self._config,
-                html_content=html,   # pass pre-loaded HTML, skip HTTP request
+                html_content=html,  # pass pre-loaded HTML, skip HTTP request
             )
 
         if not result.success:
@@ -118,7 +122,7 @@ class PageCleaner:
             # Fallback: basic HTML tag stripping
             return _basic_html_strip(html)[:limit]
 
-        markdown = result.markdown_v2.fit_markdown or result.markdown or ""
+        markdown = result.markdown.fit_markdown or str(result.markdown) or ""
         markdown = _remove_noise(markdown)
         markdown = _collapse_whitespace(markdown)
 
@@ -133,11 +137,7 @@ class PageCleaner:
         )
         return markdown
 
-    async def fetch_and_clean(
-        self,
-        url: str,
-        max_chars: Optional[int] = None,
-    ) -> str:
+    async def fetch_and_clean(self, url: str, max_chars: Optional[int] = None) -> str:
         """
         Fetch a URL and return clean Markdown in one step.
 
@@ -153,7 +153,7 @@ class PageCleaner:
             logger.warning(f"Crawl4AI fetch failed for {url}: {result.error_message}")
             return ""
 
-        markdown = result.markdown_v2.fit_markdown or result.markdown or ""
+        markdown = result.markdown.fit_markdown or str(result.markdown) or ""
         markdown = _remove_noise(markdown)
         markdown = _collapse_whitespace(markdown)
 
@@ -170,19 +170,25 @@ class PageCleaner:
         """
         # For results pages we want denser content — lower pruning threshold
         results_filter = PruningContentFilter(
-            threshold=0.3,   # keep more blocks
+            threshold=0.3,  # keep more blocks
             threshold_type="fixed",
             min_word_threshold=5,
         )
         results_generator = DefaultMarkdownGenerator(
             content_filter=results_filter,
-            options={"ignore_links": False, "body_width": 0},
+            options={"ignore_links": False, "body_width": 0}
         )
         results_config = CrawlerRunConfig(
             markdown_generator=results_generator,
             excluded_tags=[
-                "script", "style", "noscript", "iframe",
-                "header", "nav", "aside", "svg",
+                "script",
+                "style",
+                "noscript",
+                "iframe",
+                "header",
+                "nav",
+                "aside",
+                "svg",
             ],
             exclude_social_media_links=True,
             remove_overlay_elements=True,
@@ -198,7 +204,7 @@ class PageCleaner:
         if not result.success:
             return _basic_html_strip(html)[:GEMINI_MAX_INPUT_CHARS]
 
-        markdown = result.markdown_v2.fit_markdown or result.markdown or ""
+        markdown = result.markdown.fit_markdown or str(result.markdown) or ""
         markdown = _remove_noise(markdown)
         markdown = _collapse_whitespace(markdown)
         return markdown[:GEMINI_MAX_INPUT_CHARS]
@@ -207,6 +213,7 @@ class PageCleaner:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _remove_noise(text: str) -> str:
     """Strip common noise patterns from Markdown."""

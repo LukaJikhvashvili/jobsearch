@@ -42,6 +42,7 @@ async def main():
     # ----------------------------------------------------------------
     print("\n--- Step 1: Gemini init ---")
     from gemini_helper import GeminiHelper
+
     g = GeminiHelper()
     print(f"✓ Gemini OK — flash daily remaining: {g.flash_daily_remaining}")
 
@@ -50,6 +51,7 @@ async def main():
     # ----------------------------------------------------------------
     print("\n--- Step 2: Browser launch ---")
     from browser.launcher import BrowserManager, HumanActions
+
     bm = BrowserManager()
     await bm.start()
     print("✓ Browser launched")
@@ -63,7 +65,7 @@ async def main():
     cleaner = PageCleaner()
     page = await bm.new_page("jobs_ge")
 
-    test_url = "https://jobs.ge/?q=python&l="
+    test_url = "https://jobs.ge/en"
     success = await HumanActions.safe_goto(page, test_url)
 
     if not success:
@@ -78,6 +80,8 @@ async def main():
     markdown = await cleaner.clean_for_job_listing(html, url=test_url)
 
     print(f"✓ Crawl4AI cleaned: {len(html)} html → {len(markdown)} chars markdown")
+    print(markdown)
+
     if len(markdown) < 100:
         print("⚠ Warning: markdown output is very short — the site may have changed.")
         print("  First 500 chars of markdown:")
@@ -97,7 +101,7 @@ async def main():
         site_name="jobs_ge",
         query="python developer",
         location="Tbilisi",
-        max_pages=1,   # just 1 page for the test
+        max_pages=1,  # just 1 page for the test
     )
 
     print(f"✓ Extracted {len(jobs)} jobs from Jobs.ge")
