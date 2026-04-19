@@ -16,6 +16,7 @@ _NOISE_TAGS = [
     "link",
     "meta",
     "head",
+    "img",
 ]
 
 # Attributes worth keeping (everything else is stripped to reduce noise)
@@ -77,31 +78,3 @@ def clean_html(html: str, max_chars: int = 40_000) -> str:
         cleaned = truncated
 
     return cleaned.strip()
-
-
-def extract_sample_cards(html: str, n_cards: int = 3, max_chars: int = 20_000) -> str:
-    """
-    Heuristically pull a small sample of the most-repeated element
-    (likely the job card) from a listings page.
-
-    Falls back to full clean_html() if no clear pattern is found.
-    """
-    soup = BeautifulSoup(html, "lxml")
-
-    # Count (tag, frozenset(classes)) occurrences
-    freq: dict[tuple, int] = {}
-    for tag in soup.find_all(True):
-        classes = frozenset(tag.get("class", []))
-        key = (tag.name, classes)
-        freq[key] = freq.get(key, 0) + 1
-
-    # Must appear at least 3 times to be a repeating card
-    candidates = {k: v for k, v in freq.items() if v >= 3}
-    if not candidates:
-        return clean_html(html, max_chars)
-
-    best_tag, best_classes = max(candidates, key=lambda k: candidates[k])
-    matches = soup.find_all(best_tag, class_=list(best_classes) or None)
-
-    sample_html = "\n".join(str(el) for el in matches[:n_cards])
-    return clean_html(sample_html, max_chars)

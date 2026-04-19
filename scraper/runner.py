@@ -44,11 +44,7 @@ _USER_AGENT = (
 # ---------------------------------------------------------------------------
 
 
-def _extract(
-    soup: BeautifulSoup,
-    field: Optional[FieldSelector],
-    base_url: str = "",
-) -> Optional[str]:
+def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str = "") -> Optional[str]:
     """
     Extract a single value from a BeautifulSoup node using a FieldSelector.
     Returns None if the selector is missing or finds nothing.
