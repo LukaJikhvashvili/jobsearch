@@ -23,6 +23,8 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from .models import (
     ApplicationMethod,
     AttrType,
+    DetailNavType,
+    DetailNavigation,
     FieldSelector,
     JobListing,
     SiteAdapter,
@@ -42,7 +44,11 @@ _USER_AGENT = (
 # ---------------------------------------------------------------------------
 
 
-def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str = "") -> Optional[str]:
+def _extract(
+    soup: BeautifulSoup,
+    field: Optional[FieldSelector],
+    base_url: str = "",
+) -> Optional[str]:
     """
     Extract a single value from a BeautifulSoup node using a FieldSelector.
     Returns None if the selector is missing or finds nothing.
@@ -79,8 +85,8 @@ def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str 
 
 class ScraperRunner:
     def __init__(
-        self, adapter: SiteAdapter, headless: bool = True, concurrency: int = 1
-    ):  # detail pages fetched sequentially for now
+        self, adapter: SiteAdapter, headless: bool = True, concurrency: int = 1  # detail pages fetched sequentially for now
+    ):
         self.adapter = adapter
         self.headless = headless
         self.concurrency = concurrency
@@ -166,8 +172,21 @@ class ScraperRunner:
             logger.info("%d cards on %s", len(cards), current_page.url)
             fields = adapter.listings.fields
 
-            for card in cards:
-                url = _extract(card, fields.get("url"), adapter.base_url)
+            nav = adapter.listings.navigation
+
+            for i, card in enumerate(cards):
+                # ---- Resolve the detail page URL from this card ----
+                url = self._url_from_soup(card, nav, adapter.base_url)
+
+                # For JS-only click navigation, we must ask Playwright
+                # to click the element and capture where it navigates.
+                # We do this lazily (only when soup extraction returned nothing).
+                _needs_click = url is None and nav.type in (
+                    DetailNavType.CARD_CLICK,
+                    DetailNavType.BUTTON_CLICK,
+                )
+                if _needs_click:
+                    url = await self._click_card_for_url(current_page, adapter.listings.container, i, nav)
 
                 # Deduplicate across pagination pages
                 if url and url in seen_urls:
@@ -187,6 +206,108 @@ class ScraperRunner:
                 )
 
         await page.close()
+
+    # ------------------------------------------------------------------ URL resolution from soup
+
+    @staticmethod
+    def _url_from_soup(card: BeautifulSoup, nav: DetailNavigation, base_url: str) -> Optional[str]:
+        """
+        Resolve the detail page URL from a card's static HTML using the
+        navigation config. Returns None for click-based types when the
+        href is not present in the markup (pure JS navigation).
+        """
+        if nav.type == DetailNavType.DIRECT_LINK:
+            # Explicit link selector
+            if nav.link_selector:
+                el = card.select_one(nav.link_selector)
+                if el:
+                    href = el.get("href", "")
+                    return urljoin(base_url, href) if href else None
+            # Fallback: first <a> in the card
+            a = card.find("a", href=True)
+            return urljoin(base_url, a["href"]) if a else None
+
+        elif nav.type == DetailNavType.DATA_ATTR:
+            attr = nav.data_attribute or "data-href"
+            # Check the card element itself first, then children
+            val = card.get(attr)
+            if not val:
+                el = card.select_one(f"[{attr}]")
+                val = el.get(attr) if el else None
+            return urljoin(base_url, val) if val else None
+
+        elif nav.type == DetailNavType.BUTTON_CLICK:
+            # Many "button" CTAs are actually <a> tags — try href first
+            if nav.link_selector:
+                el = card.select_one(nav.link_selector)
+                if el:
+                    href = el.get("href", "")
+                    if href:
+                        return urljoin(base_url, href)
+            return None  # genuine button — needs Playwright click
+
+        elif nav.type == DetailNavType.CARD_CLICK:
+            # Sometimes card-click sites still put an href on the container
+            href = card.get("href", "")
+            if href:
+                return urljoin(base_url, href)
+            # Or an <a> wrapping everything
+            a = card.find("a", href=True)
+            if a:
+                return urljoin(base_url, a["href"])
+            return None  # truly JS-only — needs Playwright click
+
+        return None
+
+    # ------------------------------------------------------------------ Playwright click navigation
+
+    async def _click_card_for_url(
+        self, listings_page: Page, container_selector: str, card_index: int, nav: DetailNavigation
+    ) -> Optional[str]:
+        """
+        For JS-driven navigation (card_click / button_click), open a new
+        browser tab, re-load the listings page, click the nth card (or its
+        button), wait for navigation, and return the resulting URL.
+
+        Uses a fresh tab so the main listings page is never disrupted.
+        """
+        tab: Page = await self._context.new_page()
+        try:
+            await tab.goto(
+                listings_page.url,
+                wait_until="domcontentloaded",
+                timeout=30_000,
+            )
+            await tab.wait_for_timeout(800)
+
+            cards_locator = tab.locator(container_selector)
+            count = await cards_locator.count()
+            if card_index >= count:
+                logger.warning("click_card_for_url: card %d not found (only %d cards)", card_index, count)
+                return None
+
+            card_loc = cards_locator.nth(card_index)
+
+            if nav.type == DetailNavType.CARD_CLICK or nav.click_container:
+                target = card_loc
+            elif nav.link_selector:
+                target = card_loc.locator(nav.link_selector).first
+            else:
+                target = card_loc
+
+            # Click and wait for navigation
+            async with tab.expect_navigation(timeout=15_000):
+                await target.click()
+
+            detail_url = tab.url
+            logger.debug("click_card_for_url: card %d → %s", card_index, detail_url)
+            return detail_url
+
+        except Exception as exc:
+            logger.warning("click_card_for_url failed for card %d: %s", card_index, exc)
+            return None
+        finally:
+            await tab.close()
 
     # ------------------------------------------------------------------ detail enrichment
 
@@ -239,7 +360,7 @@ class ScraperRunner:
 
         # Re-detect if adapter is uncertain (< 0.70 confidence)
         if confidence < 0.70 or method == ApplicationMethod.UNKNOWN:
-            method = self._heuristic_application_method(soup, listing.url or "")
+            method = self._heuristic_application_method(soup, html, listing.url or "")
 
         listing.application_method = method
 
@@ -257,7 +378,7 @@ class ScraperRunner:
 
         return listing
 
-    def _heuristic_application_method(self, soup: BeautifulSoup, page_url: str) -> ApplicationMethod:
+    def _heuristic_application_method(self, soup: BeautifulSoup, html: str, page_url: str) -> ApplicationMethod:
         """
         Multi-signal heuristic that checks in priority order:
           1. mailto: links           → email

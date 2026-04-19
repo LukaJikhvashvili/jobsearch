@@ -12,6 +12,34 @@ class AttrType(str, Enum):
     VALUE = "value"
 
 
+class DetailNavType(str, Enum):
+    DIRECT_LINK  = "direct_link"   # <a href> on the card — just follow the href
+    CARD_CLICK   = "card_click"    # whole card is clickable via JS, no plain <a>
+    BUTTON_CLICK = "button_click"  # a specific button/CTA inside the card
+    DATA_ATTR    = "data_attr"     # URL stored in data-href / data-url attribute
+
+
+class DetailNavigation(BaseModel):
+    """
+    Describes how to travel from a job card on the listings page
+    to the job detail page.
+    """
+    type: DetailNavType
+
+    # DIRECT_LINK / BUTTON_CLICK — CSS selector for the <a> or <button>
+    # relative to the card container.
+    link_selector: Optional[str] = None
+
+    # DATA_ATTR — the attribute name that holds the URL (e.g. "data-href")
+    data_attribute: Optional[str] = None
+
+    # CARD_CLICK — if true, click the container element itself
+    click_container: bool = False
+
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    notes: Optional[str] = None
+
+
 class PaginationType(str, Enum):
     URL_PARAM = "url_param"
     NEXT_BUTTON = "next_button"
@@ -35,9 +63,9 @@ class FieldSelector(BaseModel):
 
 class PaginationConfig(BaseModel):
     type: PaginationType
-    param_name: Optional[str] = None  # for url_param: e.g. "page"
+    param_name: Optional[str] = None
     start_page: int = 1
-    next_selector: Optional[str] = None  # for next_button: CSS selector
+    next_selector: Optional[str] = None
     max_pages: int = 50
     delay_ms: int = 1200
 
@@ -54,9 +82,10 @@ class ApplicationConfig(BaseModel):
 
 
 class ListingsConfig(BaseModel):
-    container: str  # repeating job card selector
+    container: str
     fields: Dict[str, FieldSelector]
     pagination: PaginationConfig
+    navigation: DetailNavigation             # how to reach the detail page
 
 
 class DetailConfig(BaseModel):
