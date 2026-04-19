@@ -51,7 +51,7 @@ async def generate_adapter(listings_url: str, site_name: str) -> None:
 
     # Step 2: ask the AI to generate the adapter
     generator = SchemaGenerator(
-        primary=GeminiProvider(api_key=GEMINI_API_KEY, model="gemini-2.0-flash"),
+        primary=GeminiProvider(api_key=GEMINI_API_KEY),
         fallback=ClaudeProvider(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None,
     )
     adapter = generator.generate(

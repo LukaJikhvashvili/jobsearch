@@ -10,8 +10,8 @@ return a single JSON object conforming to the SiteAdapter schema.
 
 import json
 import logging
-import os
 import re
+import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
@@ -53,20 +53,19 @@ _SCHEMA_REFERENCE = r"""
   "site":               "string  — domain, e.g. jobs.ge",
   "base_url":           "string  — origin, e.g. https://jobs.ge",
   "listings_url":       "string  — the listings page URL you analysed",
-  "requires_js":        "boolean —  ctrue if page needs JS to renderards",
+  "requires_js":        "boolean — true if page needs JS to render cards",
   "requires_auth":      "boolean",
   "overall_confidence": "float   0.0–1.0",
   "notes":              "string or null",
-
+ 
   "listings": {
     "container": "CSS selector matching each job card (the repeating element)",
     "fields": {
-      "title":       { "selector": "CSS or null", "attr": "text",              "confidence": 0.0–1.0 },
-      "company":     { "selector": "CSS or null", "attr": "text",              "confidence": 0.0–1.0 },
-      "location":    { "selector": "CSS or null", "attr": "text",              "confidence": 0.0–1.0 },
-      "salary":      { "selector": "CSS or null", "attr": "text",              "confidence": 0.0–1.0 },
-      "url":         { "selector": "CSS — <a> element", "attr": "href",        "confidence": 0.0–1.0 },
-      "posted_date": { "selector": "CSS or null", "attr": "text",              "confidence": 0.0–1.0 }
+      "title":       { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
+      "company":     { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
+      "location":    { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
+      "salary":      { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
+      "posted_date": { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 }
     },
     "pagination": {
       "type":          "url_param | next_button | infinite_scroll | none",
@@ -75,9 +74,17 @@ _SCHEMA_REFERENCE = r"""
       "next_selector": "CSS selector for the Next button/link or null",
       "max_pages":     50,
       "delay_ms":      1200
+    },
+    "navigation": {
+      "type":           "direct_link | card_click | button_click | data_attr",
+      "link_selector":  "CSS selector (relative to container) for the <a> or <button> — null if card_click",
+      "data_attribute": "attribute name holding the URL, e.g. data-href — only for data_attr type, else null",
+      "click_container": "boolean — true only when type is card_click",
+      "confidence":     0.0–1.0,
+      "notes":          "brief explanation of how you determined the navigation pattern or null"
     }
   },
-
+ 
   "detail": {
     "fields": {
       "description":  { "selector": "CSS or null", "attr": "html", "confidence": 0.0–1.0 },
@@ -101,7 +108,7 @@ _SCHEMA_REFERENCE = r"""
 _SYSTEM_PROMPT = f"""You are an expert web scraping engineer.
 You will receive cleaned HTML from a job board — a listings page and one detail page.
 Your job is to produce a JSON adapter that maps CSS selectors to every important field.
-
+ 
 STRICT RULES:
 1. Return ONLY a single valid JSON object. No markdown fences, no prose, no explanation.
 2. If a field is absent from the page, set its selector to null. Never fabricate a selector.
@@ -109,13 +116,26 @@ STRICT RULES:
 4. Prefer stable class/id selectors. Avoid nth-child unless there is no other option.
 5. For selectors that live INSIDE the job card container, write them relative to the container
    (i.e. omit the container prefix — the runner will call container.select(field_selector)).
-
+6. The listings.fields block must NOT contain a "url" key. URL resolution is handled
+   entirely by listings.navigation — do not duplicate it as a field.
+ 
 PAGINATION CLASSIFICATION:
   url_param      — page changes via a query param (?page=2) or path segment (/page/2)
   next_button    — there is a clickable Next / › / >> element
   infinite_scroll — no visible pagination; content loads on scroll
   none           — single page, no pagination needed
-
+ 
+NAVIGATION CLASSIFICATION (check the LISTINGS page — how each card links to its detail page):
+  direct_link  — each card contains an <a href="…"> that goes directly to the detail page.
+                 Set link_selector to the CSS of that <a> (relative to container).
+  card_click   — the entire card is a clickable element driven by JS; there is no plain <a>.
+                 Set click_container: true. link_selector should be null.
+  button_click — there is a dedicated button or CTA inside the card (not wrapping the whole card).
+                 Set link_selector to that button's CSS.
+  data_attr    — the detail URL is stored in a data-* attribute on the card or a child element
+                 (e.g. data-href, data-url, data-link). Set data_attribute to the attribute name
+                 and link_selector to the element that carries it.
+ 
 APPLICATION METHOD CLASSIFICATION (check the DETAIL page):
   on_page_form   — a <form> with name/email/resume fields is visible on the page itself
   ats_redirect   — any apply button/link points to a known ATS domain:
@@ -123,12 +143,12 @@ APPLICATION METHOD CLASSIFICATION (check the DETAIL page):
   external_link  — apply button links to a different domain that is NOT a known ATS
   email          — application is via a mailto: link or a plaintext email address
   unknown        — cannot determine with confidence
-
+ 
 CONFIDENCE SCORING:
   ≥ 0.90  very clear, unambiguous selector
   0.70–0.89  likely correct but may need verification
   < 0.70  uncertain — flag in notes
-
+ 
 OUTPUT SCHEMA (fill every key; use null for missing values):
 {_SCHEMA_REFERENCE}"""
 
@@ -159,7 +179,7 @@ class AIProvider(ABC):
 
 class GeminiProvider(AIProvider):
     """
-    Uses Gemini 2.0 Flash (free tier).
+    Uses Gemini 3.1 Flash Lite (free tier).
     """
 
     def __init__(self, api_key: str, model: str = os.getenv("GEMINI_BASE_MODEL")):
