@@ -1,17 +1,25 @@
 """
-AI-powered SiteAdapter generator.
+Two-phase AI-powered SiteAdapter generator.
 
-Primary:  Gemini 2.0 Flash  (free tier, fast)
-Fallback: Claude Haiku       (cheap, reliable)
+Phase 1 — Listings analysis
+    Input : cleaned listings page HTML
+    Output: listings container, fields, pagination, navigation config
+            (a partial SiteAdapter — no detail block yet)
 
-Both providers receive the same structured prompt and are expected to
-return a single JSON object conforming to the SiteAdapter schema.
+Phase 2 — Detail analysis
+    Input : the Phase 1 result + cleaned detail page HTML
+    Output: detail fields + application config
+            (merged into the final SiteAdapter)
+
+AI providers
+    Primary : Gemini (model read from GEMINI_MODEL env var, default gemini-2.0-flash)
+    Fallback: Claude Haiku
 """
 
 import json
 import logging
-import re
 import os
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
@@ -22,7 +30,7 @@ from .models import SiteAdapter
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Known ATS domains — used in the prompt so the model classifies correctly
+# Known ATS domains
 # ---------------------------------------------------------------------------
 ATS_DOMAINS = [
     "greenhouse.io",
@@ -46,120 +54,135 @@ ATS_DOMAINS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Prompt templates
+# Shared rules injected into both prompts
 # ---------------------------------------------------------------------------
-_SCHEMA_REFERENCE = r"""
-{
-  "site":               "string  — domain, e.g. jobs.ge",
-  "base_url":           "string  — origin, e.g. https://jobs.ge",
-  "listings_url":       "string  — the listings page URL you analysed",
-  "requires_js":        "boolean — true if page needs JS to render cards",
-  "requires_auth":      "boolean",
-  "overall_confidence": "float   0.0–1.0",
-  "notes":              "string or null",
- 
-  "listings": {
-    "container": "CSS selector matching each job card (the repeating element)",
-    "fields": {
-      "title":       { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
-      "company":     { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
-      "location":    { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
-      "salary":      { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 },
-      "posted_date": { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 }
-    },
-    "pagination": {
+_SHARED_RULES = """STRICT RULES:
+1. Return ONLY a single valid JSON object. No markdown fences, no prose.
+2. If a field is absent, set selector to null. Never fabricate a selector.
+3. Prefer class/id selectors. Avoid nth-child unless there is no alternative.
+4. Selectors inside a card container must be RELATIVE to that container.
+
+CONFIDENCE SCORING:
+  >= 0.90  clear and unambiguous
+  0.70-0.89  likely correct, may need verification
+  < 0.70  uncertain — explain in notes"""
+
+# ---------------------------------------------------------------------------
+# Phase 1 — Listings prompt
+# ---------------------------------------------------------------------------
+_PHASE1_SYSTEM = f"""You are an expert web scraping engineer analysing a job listings page.
+Your job is to produce a JSON object describing the listings page structure only.
+You will NOT see the detail page yet — focus entirely on what is visible here.
+
+{_SHARED_RULES}
+
+PAGINATION TYPES:
+  url_param       — URL query param increments  (?page=2, ?p=3)
+  next_button     — a clickable Next / > / >> element exists
+  infinite_scroll — no visible pagination; content loads on scroll
+  none            — single page
+
+NAVIGATION TYPES (how each job card links to its detail page):
+  direct_link  — card contains an <a href="…"> pointing to the detail page
+                 → set link_selector to that <a>'s CSS (relative to container)
+  card_click   — the whole card navigates via JS onclick, no plain <a> tag
+                 → set click_container: true, link_selector: null
+  button_click — a specific button/CTA inside the card triggers navigation
+                 → set link_selector to that button's CSS
+  data_attr    — the detail URL lives in a data-* attribute (data-href, data-url …)
+                 → set data_attribute to the attribute name, link_selector to
+                   the element carrying it
+
+OUTPUT SCHEMA (fill every key; null for absent values):
+{{
+  "site":         "domain string, e.g. jobs.ge",
+  "base_url":     "origin, e.g. https://jobs.ge",
+  "listings_url": "the URL of the listings page provided",
+  "requires_js":  false,
+  "listings": {{
+    "container": "CSS selector for the repeating job card element",
+    "fields": {{
+      "title":       {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}},
+      "company":     {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}},
+      "location":    {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}},
+      "salary":      {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}},
+      "posted_date": {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}}
+    }},
+    "pagination": {{
       "type":          "url_param | next_button | infinite_scroll | none",
-      "param_name":    "string or null  — e.g. 'page' for ?page=2",
+      "param_name":    "query param name or null",
       "start_page":    1,
-      "next_selector": "CSS selector for the Next button/link or null",
+      "next_selector": "CSS for Next button/link or null",
       "max_pages":     50,
       "delay_ms":      1200
-    },
-    "navigation": {
+    }},
+    "navigation": {{
       "type":           "direct_link | card_click | button_click | data_attr",
-      "link_selector":  "CSS selector (relative to container) for the <a> or <button> — null if card_click",
-      "data_attribute": "attribute name holding the URL, e.g. data-href — only for data_attr type, else null",
-      "click_container": "boolean — true only when type is card_click",
-      "confidence":     0.0–1.0,
-      "notes":          "brief explanation of how you determined the navigation pattern or null"
-    }
-  },
- 
-  "detail": {
-    "fields": {
-      "description":  { "selector": "CSS or null", "attr": "html", "confidence": 0.0–1.0 },
-      "requirements": { "selector": "CSS or null", "attr": "html", "confidence": 0.0–1.0 },
-      "salary":       { "selector": "CSS or null", "attr": "text", "confidence": 0.0–1.0 }
-    },
-    "application": {
-      "method":                 "on_page_form | ats_redirect | external_link | email | unknown",
-      "form_selector":          "CSS for the <form> element or null",
-      "apply_button_selector":  "CSS for the primary apply CTA or null",
-      "external_url_selector":  "CSS for the outbound apply <a> or null",
-      "email_selector":         "CSS for the <a mailto:…> or null",
-      "ats_domain":             "detected ATS domain string or null",
-      "confidence":             0.0–1.0,
-      "notes":                  "short explanation of method detection or null"
-    }
-  }
-}
-"""
-
-_SYSTEM_PROMPT = f"""You are an expert web scraping engineer.
-You will receive cleaned HTML from a job board — a listings page and one detail page.
-Your job is to produce a JSON adapter that maps CSS selectors to every important field.
- 
-STRICT RULES:
-1. Return ONLY a single valid JSON object. No markdown fences, no prose, no explanation.
-2. If a field is absent from the page, set its selector to null. Never fabricate a selector.
-3. URL fields (job links) MUST use attr "href". Rich text fields (descriptions) use attr "html".
-4. Prefer stable class/id selectors. Avoid nth-child unless there is no other option.
-5. For selectors that live INSIDE the job card container, write them relative to the container
-   (i.e. omit the container prefix — the runner will call container.select(field_selector)).
-6. The listings.fields block must NOT contain a "url" key. URL resolution is handled
-   entirely by listings.navigation — do not duplicate it as a field.
- 
-PAGINATION CLASSIFICATION:
-  url_param      — page changes via a query param (?page=2) or path segment (/page/2)
-  next_button    — there is a clickable Next / › / >> element
-  infinite_scroll — no visible pagination; content loads on scroll
-  none           — single page, no pagination needed
- 
-NAVIGATION CLASSIFICATION (check the LISTINGS page — how each card links to its detail page):
-  direct_link  — each card contains an <a href="…"> that goes directly to the detail page.
-                 Set link_selector to the CSS of that <a> (relative to container).
-  card_click   — the entire card is a clickable element driven by JS; there is no plain <a>.
-                 Set click_container: true. link_selector should be null.
-  button_click — there is a dedicated button or CTA inside the card (not wrapping the whole card).
-                 Set link_selector to that button's CSS.
-  data_attr    — the detail URL is stored in a data-* attribute on the card or a child element
-                 (e.g. data-href, data-url, data-link). Set data_attribute to the attribute name
-                 and link_selector to the element that carries it.
- 
-APPLICATION METHOD CLASSIFICATION (check the DETAIL page):
-  on_page_form   — a <form> with name/email/resume fields is visible on the page itself
-  ats_redirect   — any apply button/link points to a known ATS domain:
-                   {", ".join(ATS_DOMAINS)}
-  external_link  — apply button links to a different domain that is NOT a known ATS
-  email          — application is via a mailto: link or a plaintext email address
-  unknown        — cannot determine with confidence
- 
-CONFIDENCE SCORING:
-  ≥ 0.90  very clear, unambiguous selector
-  0.70–0.89  likely correct but may need verification
-  < 0.70  uncertain — flag in notes
- 
-OUTPUT SCHEMA (fill every key; use null for missing values):
-{_SCHEMA_REFERENCE}"""
+      "link_selector":  "CSS relative to container, or null for card_click",
+      "data_attribute": "attribute name or null",
+      "click_container": false,
+      "confidence":     1.0,
+      "notes":          "brief explanation or null"
+    }}
+  }}
+}}"""
 
 
-def _build_user_prompt(site: str, listings_url: str, listings_html: str, detail_html: str) -> str:
+def _phase1_user(site: str, listings_url: str, listings_html: str) -> str:
     return (
         f"Site: {site}\n"
         f"Listings URL: {listings_url}\n\n"
         f"=== LISTINGS PAGE HTML ===\n{listings_html}\n\n"
+        "Analyse this listings page and return the Phase 1 JSON."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Detail prompt
+# ---------------------------------------------------------------------------
+_PHASE2_SYSTEM = f"""You are an expert web scraping engineer analysing a job detail page.
+You have already mapped the listings page. Now analyse ONE detail page to complete the adapter.
+
+{_SHARED_RULES}
+
+APPLICATION METHOD (examine all links, forms, and buttons on this page):
+  on_page_form  — a <form> with resume/email/name fields is present on this page itself
+  ats_redirect  — the apply button/link points to a known ATS:
+                  {", ".join(ATS_DOMAINS)}
+  external_link — apply button links to a non-ATS external domain
+  email         — application is via a mailto: link or visible email address
+  unknown       — cannot determine
+
+OUTPUT SCHEMA (fill every key; null for absent values):
+{{
+  "detail": {{
+    "fields": {{
+      "description":  {{"selector": "CSS or null", "attr": "html", "confidence": 1.0}},
+      "requirements": {{"selector": "CSS or null", "attr": "html", "confidence": 1.0}},
+      "salary":       {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}}
+    }},
+    "application": {{
+      "method":                "on_page_form | ats_redirect | external_link | email | unknown",
+      "form_selector":         "CSS for <form> element or null",
+      "apply_button_selector": "CSS for primary apply CTA or null",
+      "external_url_selector": "CSS for outbound apply <a> or null",
+      "email_selector":        "CSS for <a mailto:…> or null",
+      "ats_domain":            "detected ATS domain or null",
+      "confidence":            1.0,
+      "notes":                 "brief explanation or null"
+    }}
+  }},
+  "requires_js":        false,
+  "overall_confidence": 1.0,
+  "notes":              "any important notes about this site or null"
+}}"""
+
+
+def _phase2_user(detail_url: str, detail_html: str) -> str:
+    return (
+        f"Detail page URL: {detail_url}\n\n"
         f"=== JOB DETAIL PAGE HTML ===\n{detail_html}\n\n"
-        "Generate the adapter JSON now."
+        "Analyse this detail page and return the Phase 2 JSON."
     )
 
 
@@ -179,23 +202,24 @@ class AIProvider(ABC):
 
 class GeminiProvider(AIProvider):
     """
-    Uses Gemini 3.1 Flash Lite (free tier).
+    Uses the new `google-genai` SDK (from google import genai).
+    Model is read from the GEMINI_MODEL env var; falls back to gemini-2.0-flash.
     """
 
-    def __init__(self, api_key: str, model: str = os.getenv("GEMINI_BASE_MODEL")):
+    def __init__(self, api_key: str):
         from google import genai
-
-        self._client = genai.Client(api_key=api_key)
-        self._model_name = model
-
-    def generate(self, system: str, user: str) -> str:
         from google.genai import types
 
+        model = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        self._model_name = model
+        self._client = genai.Client(api_key=api_key)
+        self._types = types
+
+    def generate(self, system: str, user: str) -> str:
         response = self._client.models.generate_content(
             model=self._model_name,
-            contents=user,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
+            contents=f"{system}\n\n{user}",
+            config=self._types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
                 max_output_tokens=4096,
@@ -209,9 +233,7 @@ class GeminiProvider(AIProvider):
 
 
 class ClaudeProvider(AIProvider):
-    """
-    Claude Haiku — cheap and fast, used as fallback.
-    """
+    """Claude Haiku — fallback provider."""
 
     def __init__(self, api_key: str, model: str = "claude-haiku-4-5-20251001"):
         import anthropic
@@ -234,65 +256,140 @@ class ClaudeProvider(AIProvider):
 
 
 # ---------------------------------------------------------------------------
-# Output parsing & validation
+# JSON parsing helpers
 # ---------------------------------------------------------------------------
 
 
 def _strip_fences(text: str) -> str:
-    """Remove ```json … ``` wrappers that some models add despite instructions."""
     text = text.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
 
 
-def _parse_and_validate(raw: str, site: str, listings_url: str) -> SiteAdapter:
-    cleaned = _strip_fences(raw)
-    data = json.loads(cleaned)
-
-    # Inject fields the model may have omitted
-    data.setdefault("site", site)
-    data.setdefault("base_url", f"{urlparse(listings_url).scheme}://{urlparse(listings_url).netloc}")
-    data.setdefault("listings_url", listings_url)
-    data.setdefault("generated_at", datetime.utcnow().isoformat())
-
-    return SiteAdapter.model_validate(data)
+def _parse(raw: str) -> dict:
+    return json.loads(_strip_fences(raw))
 
 
 # ---------------------------------------------------------------------------
-# Public interface
+# Phase result models (plain dicts before full validation)
+# ---------------------------------------------------------------------------
+
+
+def _build_partial_from_phase1(data: dict, site: str, listings_url: str) -> dict:
+    """Normalise and backfill Phase 1 output."""
+    parsed = urlparse(listings_url)
+    data.setdefault("site", site)
+    data.setdefault("base_url", f"{parsed.scheme}://{parsed.netloc}")
+    data.setdefault("listings_url", listings_url)
+    data.setdefault("requires_js", False)
+    return data
+
+
+def _merge_phase2(partial: dict, phase2: dict) -> dict:
+    """Merge Phase 2 output into the partial dict to produce a full adapter."""
+    partial["detail"] = phase2["detail"]
+    # Phase 2 may refine requires_js (e.g. detail page needs JS but listings didn't)
+    partial["requires_js"] = partial.get("requires_js") or phase2.get("requires_js", False)
+    partial["overall_confidence"] = phase2.get("overall_confidence", 0.8)
+    if phase2.get("notes"):
+        existing = partial.get("notes") or ""
+        partial["notes"] = (existing + " | " + phase2["notes"]).strip(" |")
+    partial["generated_at"] = datetime.utcnow().isoformat()
+    return partial
+
+
+# ---------------------------------------------------------------------------
+# SchemaGenerator — public interface
 # ---------------------------------------------------------------------------
 
 
 class SchemaGenerator:
     """
-    Orchestrates one or more AI providers to generate a SiteAdapter.
-    Tries the primary provider first; falls back to secondary on any error.
+    Two-phase SiteAdapter generator.
+
+    Phase 1: LLM analyses listings HTML → returns listings config + navigation
+    Phase 2: caller navigates to a real detail page using Phase 1 navigation,
+             then calls generate_phase2() with that HTML → returns full adapter
+
+    Typical usage (orchestrated by the Profiler):
+
+        gen = SchemaGenerator(primary=GeminiProvider(api_key), fallback=...)
+
+        partial = gen.generate_phase1(site, listings_url, listings_html)
+        # → partial is a dict (not yet a full SiteAdapter)
+
+        detail_url, detail_html = await profiler.navigate_to_detail(partial)
+
+        adapter = gen.generate_phase2(partial, detail_url, detail_html)
+        # → full SiteAdapter, ready to save
     """
 
     def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None):
         self.primary = primary
         self.fallback = fallback
 
-    def generate(self, site: str, listings_url: str, listings_html: str, detail_html: str) -> SiteAdapter:
-        user_prompt = _build_user_prompt(site, listings_url, listings_html, detail_html)
-        providers = [p for p in (self.primary, self.fallback) if p is not None]
+    # ------------------------------------------------------------------ Phase 1
 
+    def generate_phase1(self, site: str, listings_url: str, listings_html: str) -> dict:
+        """
+        Analyse the listings page.
+        Returns a plain dict (partial adapter) — NOT yet a SiteAdapter.
+        The caller must navigate to a detail page and call generate_phase2().
+        """
+        system = _PHASE1_SYSTEM
+        user = _phase1_user(site, listings_url, listings_html)
+
+        raw = self._call(system, user, site, phase=1)
+        data = _parse(raw)
+        partial = _build_partial_from_phase1(data, site, listings_url)
+
+        logger.info(
+            "Phase 1 complete  site=%s  nav_type=%s  pagination=%s",
+            site,
+            partial.get("listings", {}).get("navigation", {}).get("type", "?"),
+            partial.get("listings", {}).get("pagination", {}).get("type", "?"),
+        )
+        return partial
+
+    # ------------------------------------------------------------------ Phase 2
+
+    def generate_phase2(self, partial: dict, detail_url: str, detail_html: str) -> SiteAdapter:
+        """
+        Analyse the detail page and merge into the partial adapter.
+        Returns a validated SiteAdapter.
+        """
+        site = partial.get("site", detail_url)
+
+        system = _PHASE2_SYSTEM
+        user = _phase2_user(detail_url, detail_html)
+
+        raw = self._call(system, user, site, phase=2)
+        phase2_data = _parse(raw)
+
+        merged = _merge_phase2(partial, phase2_data)
+        adapter = SiteAdapter.model_validate(merged)
+
+        logger.info(
+            "Phase 2 complete  site=%s  apply=%s  confidence=%.2f",
+            site,
+            adapter.detail.application.method,
+            adapter.overall_confidence,
+        )
+        return adapter
+
+    # ------------------------------------------------------------------ internals
+
+    def _call(self, system: str, user: str, site: str, phase: int) -> str:
+        providers = [p for p in (self.primary, self.fallback) if p is not None]
         last_error: Exception = RuntimeError("No providers configured")
+
         for provider in providers:
             try:
-                logger.info("Generating adapter for %s via %s …", site, provider.name)
-                raw = provider.generate(_SYSTEM_PROMPT, user_prompt)
-                adapter = _parse_and_validate(raw, site, listings_url)
-                logger.info(
-                    "Adapter ready  site=%s  confidence=%.2f  provider=%s",
-                    site,
-                    adapter.overall_confidence,
-                    provider.name,
-                )
-                return adapter
+                logger.info("Phase %d  site=%s  provider=%s", phase, site, provider.name)
+                return provider.generate(system, user)
             except Exception as exc:
-                logger.warning("%s failed for %s: %s", provider.name, site, exc)
+                logger.warning("Phase %d  %s failed for %s: %s", phase, provider.name, site, exc)
                 last_error = exc
 
-        raise RuntimeError(f"All providers failed for {site}") from last_error
+        raise RuntimeError(f"All providers failed (phase {phase}, site {site})") from last_error

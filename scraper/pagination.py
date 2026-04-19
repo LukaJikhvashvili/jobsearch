@@ -247,10 +247,7 @@ class InfiniteScrollPagination(PaginationStrategy):
 # ---------------------------------------------------------------------------
 
 
-def get_pagination_strategy(
-    config: PaginationConfig,
-    container_selector: str = "",
-) -> PaginationStrategy:
+def get_pagination_strategy(config: PaginationConfig, container_selector: str = "") -> PaginationStrategy:
     mapping = {
         PaginationType.NONE: NoPagination,
         PaginationType.URL_PARAM: UrlParamPagination,
