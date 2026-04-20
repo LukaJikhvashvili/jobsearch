@@ -1,7 +1,7 @@
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict
-from pydantic import BaseModel, Field
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator
 
 
 class AttrType(str, Enum):
@@ -59,6 +59,12 @@ class FieldSelector(BaseModel):
     selector: Optional[str] = None
     attr: AttrType = AttrType.TEXT
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    @field_validator("attr", mode="before")
+    @classmethod
+    def default_attr(cls, v):
+        return v or AttrType.TEXT
+
 
 
 class PaginationConfig(BaseModel):

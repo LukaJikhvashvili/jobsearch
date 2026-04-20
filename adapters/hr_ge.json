@@ -1,0 +1,87 @@
+{
+  "site": "hr.ge",
+  "base_url": "https://www.hr.ge",
+  "listings_url": "https://www.hr.ge",
+  "listings": {
+    "container": "app-announcement-item",
+    "fields": {
+      "title": {
+        "selector": "a.title",
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "company": {
+        "selector": ".company__title",
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "location": {
+        "selector": ".location-items",
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "salary": {
+        "selector": null,
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "posted_date": {
+        "selector": ".date",
+        "attr": "text",
+        "confidence": 0.8
+      }
+    },
+    "pagination": {
+      "type": "none",
+      "param_name": null,
+      "start_page": 1,
+      "next_selector": null,
+      "max_pages": 50,
+      "delay_ms": 1200
+    },
+    "navigation": {
+      "type": "direct_link",
+      "link_selector": "a.title",
+      "data_attribute": null,
+      "click_container": false,
+      "confidence": 1.0,
+      "notes": null
+    }
+  },
+  "detail": {
+    "fields": {
+      "description": {
+        "selector": ".description",
+        "attr": "html",
+        "confidence": 1.0
+      },
+      "requirements": {
+        "selector": ".requirements-container",
+        "attr": "html",
+        "confidence": 1.0
+      },
+      "salary": {
+        "selector": null,
+        "attr": "text",
+        "confidence": 1.0
+      }
+    },
+    "application": {
+      "method": "on_page_form",
+      "form_selector": null,
+      "apply_button_selector": ".send-cv-button-ats",
+      "external_url_selector": null,
+      "email_selector": null,
+      "ats_domain": null,
+      "confidence": 0.9,
+      "notes": "The site uses a custom 'simple feedback' (send-cv-button-ats) mechanism which likely triggers a modal or internal form. It is not a standard third-party ATS."
+    }
+  },
+  "requires_js": true,
+  "requires_auth": false,
+  "overall_confidence": 0.95,
+  "generated_at": "2026-04-20T17:20:11.639246",
+  "version": 1,
+  "is_stale": false,
+  "notes": "The site is a Single Page Application (Angular). The application process is handled internally via the 'მარტივი გამოხმაურება' button."
+}
