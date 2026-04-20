@@ -1,21 +1,16 @@
 """
-ScraperRunner: the Playwright-based execution engine.
+ScraperRunner — Playwright execution engine.
 
-Given a SiteAdapter it will:
-  1. Navigate through all listing pages (using the appropriate pagination strategy)
-  2. Extract job card fields from each page
-  3. Optionally visit each job's detail page to enrich the listing
-     and detect the application method
-
-Usage:
-    async with ScraperRunner(adapter) as runner:
-        async for job in runner.run(enrich=True):
-            print(job.title, job.application_method)
+Flow:
+  1. Apply user filters (URL params first, then DOM interactions)
+  2. Paginate through filtered listing pages
+  3. Extract title + company from each card
+  4. Optionally visit each detail page to enrich the listing
 """
 
 import logging
 from typing import AsyncIterator, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlencode, parse_qs, urlunparse
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -26,40 +21,37 @@ from .models import (
     DetailNavType,
     DetailNavigation,
     FieldSelector,
+    FilterDimension,
+    FilterEntry,
+    FilterMechanism,
+    FiltersConfig,
     JobListing,
     SiteAdapter,
+    UserFilters,
 )
 from .pagination import get_pagination_strategy
 
 logger = logging.getLogger(__name__)
 
-# Browser user-agent that avoids bot-detection on most sites
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " "AppleWebKit/537.36 (KHTML, like Gecko) " "Chrome/124.0.0.0 Safari/537.36"
 )
 
 
 # ---------------------------------------------------------------------------
-# Field extraction helper
+# Field extraction (BeautifulSoup)
 # ---------------------------------------------------------------------------
 
 
 def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str = "") -> Optional[str]:
-    """
-    Extract a single value from a BeautifulSoup node using a FieldSelector.
-    Returns None if the selector is missing or finds nothing.
-    """
     if field is None or not field.selector:
         return None
-
     el = soup.select_one(field.selector)
     if el is None:
         return None
-
     attr = field.attr
     if attr == AttrType.TEXT:
-        text = el.get_text(separator=" ", strip=True)
-        return text or None
+        return el.get_text(separator=" ", strip=True) or None
     elif attr == AttrType.HTML:
         return str(el) or None
     elif attr == AttrType.HREF:
@@ -70,7 +62,6 @@ def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str 
         return urljoin(base_url, src) if src else None
     elif attr == AttrType.VALUE:
         return el.get("value") or el.get_text(strip=True) or None
-
     return None
 
 
@@ -80,27 +71,18 @@ def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str 
 
 
 class ScraperRunner:
-    def __init__(
-        self, adapter: SiteAdapter, headless: bool = True, concurrency: int = 1  # detail pages fetched sequentially for now
-    ):
+    def __init__(self, adapter: SiteAdapter, headless: bool = True):
         self.adapter = adapter
         self.headless = headless
-        self.concurrency = concurrency
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
-
-    # ------------------------------------------------------------------ context manager
 
     async def __aenter__(self) -> "ScraperRunner":
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=self.headless,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"],
         )
         self._context = await self._browser.new_context(
             user_agent=_USER_AGENT,
@@ -109,7 +91,6 @@ class ScraperRunner:
             java_script_enabled=True,
             ignore_https_errors=True,
         )
-        # Suppress noisy resource types to speed up loading
         await self._context.route(
             "**/*.{png,jpg,jpeg,gif,webp,woff,woff2,ttf,otf}",
             lambda route: route.abort(),
@@ -124,67 +105,63 @@ class ScraperRunner:
         if self._playwright:
             await self._playwright.stop()
 
-    # ------------------------------------------------------------------ listings scrape
+    # ------------------------------------------------------------------ public
 
-    async def scrape_listings(self) -> AsyncIterator[JobListing]:
+    async def run(self, filters: Optional[UserFilters] = None, enrich: bool = True) -> AsyncIterator[JobListing]:
         """
-        Iterate through all listing pages and yield a partial JobListing
-        (listing-page fields only) for each job card found.
+        Full pipeline.  Pass a UserFilters instance to narrow results before
+        iterating. Set enrich=False to skip detail-page visits (fast mode).
         """
+        async for listing in self.scrape_listings(filters=filters):
+            if enrich and listing.url:
+                listing = await self.enrich_with_detail(listing)
+            yield listing
+
+    # ------------------------------------------------------------------ listings
+
+    async def scrape_listings(self, filters: Optional[UserFilters] = None) -> AsyncIterator[JobListing]:
         adapter = self.adapter
         page: Page = await self._context.new_page()
 
+        # ── Step 1: build the starting URL (URL-param filters applied here) ──
+        start_url = self._build_filtered_url(adapter.listings_url, filters)
+
         try:
-            await page.goto(
-                adapter.listings_url,
-                wait_until="domcontentloaded",
-                timeout=30_000,
-            )
-        except Exception as e:
-            logger.error("Failed to load listings page %s: %s", adapter.listings_url, e)
+            await page.goto(start_url, wait_until="domcontentloaded", timeout=30_000)
+        except Exception as exc:
+            logger.error("Failed to load listings page %s: %s", start_url, exc)
             await page.close()
             return
 
+        # ── Step 2: apply DOM-based filters ──
+        if filters and not filters.is_empty():
+            await self._apply_dom_filters(page, adapter.listings.filters, filters)
+
+        # ── Step 3: paginate and yield cards ──
         strategy = get_pagination_strategy(
             adapter.listings.pagination,
             container_selector=adapter.listings.container,
         )
-
         seen_urls: set[str] = set()
 
-        async for current_page in strategy.pages(page, adapter.listings_url):
+        async for current_page in strategy.pages(page, current_url := page.url):
             html = await current_page.content()
             soup = BeautifulSoup(html, "lxml")
             cards = soup.select(adapter.listings.container)
 
             if not cards:
-                logger.warning(
-                    "0 cards found with selector '%s' on %s",
-                    adapter.listings.container,
-                    current_page.url,
-                )
+                logger.warning("0 cards with selector '%s' on %s", adapter.listings.container, current_page.url)
                 continue
 
             logger.info("%d cards on %s", len(cards), current_page.url)
             fields = adapter.listings.fields
-
             nav = adapter.listings.navigation
 
             for i, card in enumerate(cards):
-                # ---- Resolve the detail page URL from this card ----
                 url = self._url_from_soup(card, nav, adapter.base_url)
-
-                # For JS-only click navigation, we must ask Playwright
-                # to click the element and capture where it navigates.
-                # We do this lazily (only when soup extraction returned nothing).
-                _needs_click = url is None and nav.type in (
-                    DetailNavType.CARD_CLICK,
-                    DetailNavType.BUTTON_CLICK,
-                )
-                if _needs_click:
+                if url is None and nav.type in (DetailNavType.CARD_CLICK, DetailNavType.BUTTON_CLICK):
                     url = await self._click_card_for_url(current_page, adapter.listings.container, i, nav)
 
-                # Deduplicate across pagination pages
                 if url and url in seen_urls:
                     continue
                 if url:
@@ -194,282 +171,357 @@ class ScraperRunner:
                     site=adapter.site,
                     title=_extract(card, fields.get("title")),
                     company=_extract(card, fields.get("company")),
-                    location=_extract(card, fields.get("location")),
-                    salary=_extract(card, fields.get("salary")),
                     url=url,
-                    posted_date=_extract(card, fields.get("posted_date")),
                     adapter_version=adapter.version,
                 )
 
         await page.close()
 
-    # ------------------------------------------------------------------ URL resolution from soup
+    # ================================================================== FILTERING
+
+    def _build_filtered_url(self, base_listings_url: str, filters: Optional[UserFilters]) -> str:
+        """
+        Inject all URL_PARAM filters into the listings URL.
+        DOM-based filters are handled separately after page load.
+        """
+        if not filters or filters.is_empty():
+            return base_listings_url
+
+        available = self.adapter.listings.filters.available
+        url_filters = [f for f in available if f.mechanism == FilterMechanism.URL_PARAM]
+        if not url_filters:
+            return base_listings_url
+
+        parsed = urlparse(base_listings_url)
+        qs = parse_qs(parsed.query, keep_blank_values=True)
+
+        for entry in url_filters:
+            value = self._user_value_for(filters, entry.dimension)
+            if value is None or not entry.param_name:
+                continue
+
+            if value:
+                qs[entry.param_name] = [str(value)]
+                logger.debug("URL filter: %s=%s", entry.param_name, value)
+
+        new_query = urlencode({k: v[0] for k, v in qs.items()})
+        return urlunparse(parsed._replace(query=new_query))
+
+    async def _apply_dom_filters(self, page: Page, filters_config: FiltersConfig, user_filters: UserFilters) -> None:
+        """
+        Apply all DOM-based filter interactions in order, then click
+        the submit button if one is configured.
+        """
+        dom_mechanisms = {
+            FilterMechanism.SEARCH_FIELD,
+            FilterMechanism.DROPDOWN,
+            FilterMechanism.CHECKBOX_GROUP,
+            FilterMechanism.TAG_FILTER,
+            FilterMechanism.RADIO_GROUP,
+            FilterMechanism.DATE_RANGE,
+        }
+        applied_any = False
+
+        for entry in filters_config.available:
+            if entry.mechanism not in dom_mechanisms:
+                continue
+
+            value = self._user_value_for(user_filters, entry.dimension)
+            if value is None:
+                continue
+
+            try:
+                success = await self._apply_single_filter(page, entry, str(value))
+                if success:
+                    applied_any = True
+                    logger.info("Filter applied: %s=%s (%s)", entry.dimension, value, entry.mechanism)
+            except Exception as exc:
+                logger.warning("Filter failed: %s=%s — %s", entry.dimension, value, exc)
+
+        # Click submit button if any DOM filter was applied and a button exists
+        if applied_any and filters_config.submit_selector:
+            try:
+                btn = page.locator(filters_config.submit_selector).first
+                if await btn.is_visible(timeout=3_000):
+                    await btn.click()
+                    await page.wait_for_load_state("networkidle", timeout=10_000)
+                    logger.info("Clicked submit: %s", filters_config.submit_selector)
+            except Exception as exc:
+                logger.warning("Submit click failed: %s", exc)
+
+    async def _apply_single_filter(self, page: Page, entry: FilterEntry, value: str) -> bool:
+        """Dispatch to the right interaction for each filter mechanism."""
+
+        # ── Search field ────────────────────────────────────────────────────
+        if entry.mechanism == FilterMechanism.SEARCH_FIELD:
+            if not entry.selector:
+                return False
+            inp = page.locator(entry.selector).first
+            await inp.wait_for(state="visible", timeout=5_000)
+            await inp.triple_click()  # select all existing text
+            await inp.fill(value)
+            # Try pressing Enter to auto-submit; the submit button handles it otherwise
+            await inp.press("Enter")
+            await page.wait_for_timeout(800)
+            return True
+
+        # ── Dropdown ────────────────────────────────────────────────────────
+        elif entry.mechanism == FilterMechanism.DROPDOWN:
+            if not entry.selector:
+                return False
+            sel = page.locator(entry.selector).first
+            await sel.wait_for(state="visible", timeout=5_000)
+            # Try exact match first, then partial text match via JS
+            try:
+                await sel.select_option(label=value)
+                return True
+            except Exception:
+                pass
+            # Fallback: find option whose text contains the value (case-insensitive)
+            matched = await page.evaluate(
+                """([sel, val]) => {
+                    const el = document.querySelector(sel);
+                    if (!el) return null;
+                    const opt = Array.from(el.options).find(
+                        o => o.text.toLowerCase().includes(val.toLowerCase())
+                    );
+                    if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change')); return opt.value; }
+                    return null;
+                }""",
+                [entry.selector, value],
+            )
+            return matched is not None
+
+        # ── Tag filter (pill buttons) ───────────────────────────────────────
+        elif entry.mechanism == FilterMechanism.TAG_FILTER:
+            item_sel = entry.item_selector or entry.selector
+            if not item_sel:
+                return False
+            items = page.locator(item_sel)
+            count = await items.count()
+            for i in range(count):
+                item = items.nth(i)
+                text = (await item.inner_text()).strip()
+                if value.lower() in text.lower():
+                    await item.click()
+                    await page.wait_for_timeout(400)
+                    return True
+            return False
+
+        # ── Checkbox group ──────────────────────────────────────────────────
+        elif entry.mechanism == FilterMechanism.CHECKBOX_GROUP:
+            item_sel = entry.item_selector
+            if not item_sel:
+                return False
+            # Checkboxes: find the one whose associated label contains value
+            matched = await page.evaluate(
+                """([sel, val]) => {
+                    const inputs = document.querySelectorAll(sel);
+                    for (const inp of inputs) {
+                        const label = inp.labels?.[0]?.textContent ||
+                                      inp.closest('label')?.textContent ||
+                                      inp.nextElementSibling?.textContent || '';
+                        if (label.toLowerCase().includes(val.toLowerCase())) {
+                            if (!inp.checked) inp.click();
+                            return label.trim();
+                        }
+                    }
+                    return null;
+                }""",
+                [item_sel, value],
+            )
+            return matched is not None
+
+        # ── Radio group ─────────────────────────────────────────────────────
+        elif entry.mechanism == FilterMechanism.RADIO_GROUP:
+            item_sel = entry.item_selector
+            if not item_sel:
+                return False
+            matched = await page.evaluate(
+                """([sel, val]) => {
+                    const radios = document.querySelectorAll(sel);
+                    for (const r of radios) {
+                        const label = r.labels?.[0]?.textContent ||
+                                      r.closest('label')?.textContent ||
+                                      r.nextElementSibling?.textContent || '';
+                        if (label.toLowerCase().includes(val.toLowerCase())) {
+                            r.click(); return label.trim();
+                        }
+                    }
+                    return null;
+                }""",
+                [item_sel, value],
+            )
+            return matched is not None
+
+        # ── Date range ──────────────────────────────────────────────────────
+        elif entry.mechanism == FilterMechanism.DATE_RANGE:
+            # value is expected as "YYYY-MM-DD" or a human string; we set only
+            # the from-date (meaning "posted since") and leave to-date as today.
+            from_sel = entry.date_from_selector
+            if not from_sel:
+                return False
+            try:
+                inp = page.locator(from_sel).first
+                await inp.wait_for(state="visible", timeout=5_000)
+                await inp.fill(value)
+                return True
+            except Exception:
+                return False
+
+        return False
+
+    # ------------------------------------------------------------------ helpers
+
+    @staticmethod
+    def _user_value_for(user_filters: UserFilters, dimension: FilterDimension) -> Optional[str]:
+        """Return the user's value for a given dimension, as a string."""
+        mapping = {
+            FilterDimension.KEYWORD: user_filters.keyword,
+            FilterDimension.LOCATION: user_filters.location,
+            FilterDimension.CATEGORY: user_filters.category,
+            FilterDimension.SALARY: str(user_filters.salary_min) if user_filters.salary_min else None,
+            FilterDimension.DATE_POSTED: user_filters.date_posted,
+        }
+        return mapping.get(dimension)
+
 
     @staticmethod
     def _url_from_soup(card: BeautifulSoup, nav: DetailNavigation, base_url: str) -> Optional[str]:
-        """
-        Resolve the detail page URL from a card's static HTML using the
-        navigation config. Returns None for click-based types when the
-        href is not present in the markup (pure JS navigation).
-        """
         if nav.type == DetailNavType.DIRECT_LINK:
-            # Explicit link selector
-            if nav.link_selector:
-                el = card.select_one(nav.link_selector)
-                if el:
-                    href = el.get("href", "")
-                    return urljoin(base_url, href) if href else None
-            # Fallback: first <a> in the card
-            a = card.find("a", href=True)
-            return urljoin(base_url, a["href"]) if a else None
+            el = card.select_one(nav.link_selector) if nav.link_selector else card.find("a", href=True)
+            if el:
+                href = el.get("href", "")
+                return urljoin(base_url, href) if href else None
 
         elif nav.type == DetailNavType.DATA_ATTR:
             attr = nav.data_attribute or "data-href"
-            # Check the card element itself first, then children
-            val = card.get(attr)
-            if not val:
-                el = card.select_one(f"[{attr}]")
-                val = el.get(attr) if el else None
+            val = card.get(attr) or (card.select_one(f"[{attr}]") or {}).get(attr)
             return urljoin(base_url, val) if val else None
 
         elif nav.type == DetailNavType.BUTTON_CLICK:
-            # Many "button" CTAs are actually <a> tags — try href first
             if nav.link_selector:
                 el = card.select_one(nav.link_selector)
                 if el:
                     href = el.get("href", "")
                     if href:
                         return urljoin(base_url, href)
-            return None  # genuine button — needs Playwright click
 
         elif nav.type == DetailNavType.CARD_CLICK:
-            # Sometimes card-click sites still put an href on the container
             href = card.get("href", "")
             if href:
                 return urljoin(base_url, href)
-            # Or an <a> wrapping everything
             a = card.find("a", href=True)
             if a:
                 return urljoin(base_url, a["href"])
-            return None  # truly JS-only — needs Playwright click
 
         return None
-
-    # ------------------------------------------------------------------ Playwright click navigation
 
     async def _click_card_for_url(
         self, listings_page: Page, container_selector: str, card_index: int, nav: DetailNavigation
     ) -> Optional[str]:
-        """
-        For JS-driven navigation (card_click / button_click), open a new
-        browser tab, re-load the listings page, click the nth card (or its
-        button), wait for navigation, and return the resulting URL.
-
-        Uses a fresh tab so the main listings page is never disrupted.
-        """
         tab: Page = await self._context.new_page()
         try:
-            await tab.goto(
-                listings_page.url,
-                wait_until="domcontentloaded",
-                timeout=30_000,
-            )
+            await tab.goto(listings_page.url, wait_until="domcontentloaded", timeout=30_000)
             await tab.wait_for_timeout(800)
-
-            cards_locator = tab.locator(container_selector)
-            count = await cards_locator.count()
-            if card_index >= count:
-                logger.warning("click_card_for_url: card %d not found (only %d cards)", card_index, count)
+            cards = tab.locator(container_selector)
+            if await cards.count() <= card_index:
                 return None
-
-            card_loc = cards_locator.nth(card_index)
-
-            if nav.type == DetailNavType.CARD_CLICK or nav.click_container:
-                target = card_loc
-            elif nav.link_selector:
-                target = card_loc.locator(nav.link_selector).first
-            else:
-                target = card_loc
-
-            # Click and wait for navigation
+            card_loc = cards.nth(card_index)
+            target = (
+                card_loc if (nav.click_container or not nav.link_selector) else card_loc.locator(nav.link_selector).first
+            )
             async with tab.expect_navigation(timeout=15_000):
                 await target.click()
-
-            detail_url = tab.url
-            logger.debug("click_card_for_url: card %d → %s", card_index, detail_url)
-            return detail_url
-
+            return tab.url
         except Exception as exc:
-            logger.warning("click_card_for_url failed for card %d: %s", card_index, exc)
+            logger.warning("click_card_for_url failed at index %d: %s", card_index, exc)
             return None
         finally:
             await tab.close()
 
-    # ------------------------------------------------------------------ detail enrichment
+    # ================================================================== DETAIL ENRICHMENT
 
     async def enrich_with_detail(self, listing: JobListing) -> JobListing:
-        """
-        Visit the job's detail page and fill in description, requirements,
-        salary (if missing) and — most importantly — application info.
-        """
         if not listing.url:
             return listing
-
         page: Page = await self._context.new_page()
         try:
             await page.goto(listing.url, wait_until="domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(800)
-
             html = await page.content()
             listing.raw_html = html
-
             soup = BeautifulSoup(html, "lxml")
-            d_fields = self.adapter.detail.fields
+            d = self.adapter.detail.fields
 
-            listing.description = _extract(soup, d_fields.get("description"))
-            listing.requirements = _extract(soup, d_fields.get("requirements"))
+            listing.location = _extract(soup, d.get("location"))
+            listing.salary = _extract(soup, d.get("salary"))
+            listing.posted_date = _extract(soup, d.get("posted_date"))
+            listing.description = _extract(soup, d.get("description"))
+            listing.requirements = _extract(soup, d.get("requirements"))
 
-            # Only overwrite salary if listing page had none
-            if not listing.salary:
-                listing.salary = _extract(soup, d_fields.get("salary"))
-
-            # -------------------------------------------------------- application detection
             listing = self._detect_application(listing, soup, html)
-
         except Exception as exc:
             logger.error("Detail enrichment failed for %s: %s", listing.url, exc)
         finally:
             await page.close()
-
         return listing
 
-    def _detect_application(self, listing: JobListing, soup: BeautifulSoup, html: str) -> JobListing:
-        """
-        Determine application method with a layered detection strategy.
-        The adapter's AI-generated config is the first layer; heuristics
-        fill in the gaps when the adapter config has low confidence or
-        the selector is null.
-        """
+    def _detect_application(self, listing, soup, html) -> JobListing:
         app = self.adapter.detail.application
         method = app.method
-        confidence = app.confidence
-
-        # Re-detect if adapter is uncertain (< 0.70 confidence)
-        if confidence < 0.70 or method == ApplicationMethod.UNKNOWN:
-            method = self._heuristic_application_method(soup, html, listing.url or "")
-
+        if app.confidence < 0.70:
+            method = self._heuristic_application_method(soup, listing.url or "")
         listing.application_method = method
-
-        # Resolve URLs / emails based on method
         if method == ApplicationMethod.EMAIL:
             listing.application_email = self._find_email(soup, app.email_selector)
-
         elif method in (ApplicationMethod.ATS_REDIRECT, ApplicationMethod.EXTERNAL_LINK):
             listing.application_url = self._find_apply_url(
                 soup, app.external_url_selector or app.apply_button_selector, listing.url or ""
             )
-
         elif method == ApplicationMethod.ON_PAGE_FORM:
-            listing.application_url = listing.url  # form is on this page
-
+            listing.application_url = listing.url
         return listing
 
-    def _heuristic_application_method(self, soup: BeautifulSoup, html: str, page_url: str) -> ApplicationMethod:
-        """
-        Multi-signal heuristic that checks in priority order:
-          1. mailto: links           → email
-          2. on-page apply form      → on_page_form
-          3. ATS domain links        → ats_redirect
-          4. any external apply link → external_link
-          5. fallback                → unknown
-        """
+    def _heuristic_application_method(self, soup, page_url) -> ApplicationMethod:
         from .schema_generator import ATS_DOMAINS
-        from urllib.parse import urlparse
 
         base_domain = urlparse(page_url).netloc.lower()
-
-        # --- Signal 1: mailto link ---
         for a in soup.select("a[href^='mailto:']"):
-            email = a["href"].replace("mailto:", "").split("?")[0].strip()
-            if email:
-                logger.debug("Heuristic: email detected (%s)", email)
+            if a["href"].replace("mailto:", "").strip():
                 return ApplicationMethod.EMAIL
-
-        # --- Signal 2: on-page form with apply-like fields ---
-        apply_keywords = {"resume", "cv", "cover", "apply", "application", "upload"}
         for form in soup.find_all("form"):
-            form_text = form.get_text(" ", strip=True).lower()
-            input_names = " ".join(
-                (inp.get("name", "") + " " + inp.get("placeholder", "")).lower()
-                for inp in form.find_all(["input", "textarea"])
+            combined = form.get_text(" ") + " ".join(
+                i.get("name", "") + i.get("placeholder", "") for i in form.find_all(["input", "textarea"])
             )
-            combined = form_text + " " + input_names
-            if any(kw in combined for kw in apply_keywords):
-                logger.debug("Heuristic: on-page form detected")
+            if any(k in combined.lower() for k in ("resume", "cv", "cover", "apply", "upload")):
                 return ApplicationMethod.ON_PAGE_FORM
-
-        # --- Signal 3: ATS links ---
         for a in soup.find_all("a", href=True):
-            href: str = a["href"].lower()
-            if any(ats in href for ats in ATS_DOMAINS):
-                logger.debug("Heuristic: ATS redirect → %s", href)
+            if any(ats in a["href"].lower() for ats in ATS_DOMAINS):
                 return ApplicationMethod.ATS_REDIRECT
-
-        # --- Signal 4: apply button → external link ---
-        apply_btn_re = ["apply", "send cv", "submit", "application"]
         for a in soup.find_all("a", href=True):
-            text = a.get_text(strip=True).lower()
-            if any(kw in text for kw in apply_btn_re):
+            if any(k in a.get_text().lower() for k in ("apply", "send cv", "submit")):
                 href = a["href"]
-                if href.startswith("http"):
-                    link_domain = urlparse(href).netloc.lower()
-                    if link_domain and link_domain != base_domain:
-                        logger.debug("Heuristic: external apply link → %s", href)
-                        return ApplicationMethod.EXTERNAL_LINK
-
-        logger.debug("Heuristic: unknown application method for %s", page_url)
+                if href.startswith("http") and urlparse(href).netloc.lower() != base_domain:
+                    return ApplicationMethod.EXTERNAL_LINK
         return ApplicationMethod.UNKNOWN
 
     @staticmethod
-    def _find_email(soup: BeautifulSoup, hint_selector: Optional[str]) -> Optional[str]:
-        # Try adapter hint first
+    def _find_email(soup, hint_selector):
         if hint_selector:
             el = soup.select_one(hint_selector)
             if el:
-                href = el.get("href", "")
-                return href.replace("mailto:", "").split("?")[0].strip() or el.get_text(strip=True)
-
-        # Fallback: any mailto link
+                return el.get("href", "").replace("mailto:", "").split("?")[0].strip() or el.get_text(strip=True)
         el = soup.select_one("a[href^='mailto:']")
-        if el:
-            return el["href"].replace("mailto:", "").split("?")[0].strip()
-
-        return None
+        return el["href"].replace("mailto:", "").split("?")[0].strip() if el else None
 
     @staticmethod
-    def _find_apply_url(soup: BeautifulSoup, hint_selector: Optional[str], page_url: str) -> Optional[str]:
+    def _find_apply_url(soup, hint_selector, page_url):
         if hint_selector:
             el = soup.select_one(hint_selector)
             if el:
                 return urljoin(page_url, el.get("href", "")) or None
-
-        # Fallback: first link with 'apply' in text or href
         for a in soup.find_all("a", href=True):
-            text = a.get_text(strip=True).lower()
-            href: str = a["href"].lower()
-            if "apply" in text or "apply" in href:
+            if "apply" in a.get_text().lower() or "apply" in a["href"].lower():
                 return urljoin(page_url, a["href"])
-
         return None
-
-    # ------------------------------------------------------------------ full pipeline
-
-    async def run(self, enrich: bool = True) -> AsyncIterator[JobListing]:
-        """
-        Full pipeline: yield enriched JobListings.
-        Set enrich=False to get listing-page data only (faster).
-        """
-        async for listing in self.scrape_listings():
-            if enrich and listing.url:
-                listing = await self.enrich_with_detail(listing)
-            yield listing

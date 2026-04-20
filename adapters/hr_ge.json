@@ -1,7 +1,7 @@
 {
   "site": "hr.ge",
   "base_url": "https://www.hr.ge",
-  "listings_url": "https://www.hr.ge",
+  "listings_url": "https://hr.ge",
   "listings": {
     "container": "app-announcement-item",
     "fields": {
@@ -14,21 +14,6 @@
         "selector": ".company__title",
         "attr": "text",
         "confidence": 1.0
-      },
-      "location": {
-        "selector": ".location-items",
-        "attr": "text",
-        "confidence": 1.0
-      },
-      "salary": {
-        "selector": null,
-        "attr": "text",
-        "confidence": 1.0
-      },
-      "posted_date": {
-        "selector": ".date",
-        "attr": "text",
-        "confidence": 0.8
       }
     },
     "pagination": {
@@ -46,23 +31,75 @@
       "click_container": false,
       "confidence": 1.0,
       "notes": null
+    },
+    "filters": {
+      "available": [
+        {
+          "dimension": "keyword",
+          "mechanism": "search_field",
+          "param_name": null,
+          "selector": ".search-field__input",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": null
+        },
+        {
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": null,
+          "selector": "hrra-specialization-tree-select .p-treeselect",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 0.9,
+          "notes": "Uses PrimeNG tree select component"
+        },
+        {
+          "dimension": "location",
+          "mechanism": "dropdown",
+          "param_name": null,
+          "selector": "hrra-location-tree-select .p-treeselect",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 0.9,
+          "notes": "Uses PrimeNG tree select component"
+        }
+      ],
+      "submit_selector": ".search-btn__item",
+      "notes": null
     }
   },
   "detail": {
     "fields": {
+      "location": {
+        "selector": ".location-items .locaion-item",
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "salary": {
+        "selector": null,
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "posted_date": {
+        "selector": ".additional-info__date",
+        "attr": "text",
+        "confidence": 1.0
+      },
       "description": {
         "selector": ".description",
         "attr": "html",
         "confidence": 1.0
       },
       "requirements": {
-        "selector": ".requirements-container",
+        "selector": ".requirements-container .requirements",
         "attr": "html",
-        "confidence": 1.0
-      },
-      "salary": {
-        "selector": null,
-        "attr": "text",
         "confidence": 1.0
       }
     },
@@ -74,14 +111,14 @@
       "email_selector": null,
       "ats_domain": null,
       "confidence": 0.9,
-      "notes": "The site uses a custom 'simple feedback' (send-cv-button-ats) mechanism which likely triggers a modal or internal form. It is not a standard third-party ATS."
+      "notes": "The site uses a custom 'simple feedback' (send-cv-button-ats) mechanism which likely opens a modal on the page."
     }
   },
   "requires_js": true,
   "requires_auth": false,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-20T17:20:11.639246",
+  "generated_at": "2026-04-20T18:46:22.694601",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a Single Page Application (Angular). The application process is handled internally via the 'მარტივი გამოხმაურება' button."
+  "notes": null
 }
