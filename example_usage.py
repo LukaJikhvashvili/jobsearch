@@ -22,6 +22,7 @@ from scraper import (
     SchemaGenerator,
     SiteProfiler,
 )
+from scraper.models import UserFilters
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
@@ -67,7 +68,7 @@ async def generate_adapter(site_name: str, listings_url: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def scrape_jobs(site_name: str, enrich: bool = True) -> list[JobListing]:
+async def scrape_jobs(site_name: str, filters: UserFilters = None, enrich: bool = True) -> list[JobListing]:
     adapter = store.load(site_name)
     if adapter is None:
         raise ValueError(f"No adapter for '{site_name}'. Run generate_adapter() first.")
@@ -78,7 +79,7 @@ async def scrape_jobs(site_name: str, enrich: bool = True) -> list[JobListing]:
     print(f"\n── Scraping {site_name} ──")
 
     async with ScraperRunner(adapter, headless=False) as runner:
-        async for job in runner.run(enrich=enrich):
+        async for job in runner.run(filters=filters, enrich=enrich):
             jobs.append(job)
             print(
                 f"  [{len(jobs):>3}] {job.title or '?':<45} "
@@ -118,9 +119,11 @@ async def main():
         if store.needs_refresh(site_name):
             await generate_adapter(site_name, listings_url)
 
+    filters = UserFilters(keyword="analyst", date_posted="last_7_days", location="Kutaisi")
+
     all_jobs: list[JobListing] = []
     for site_name in SITES:
-        jobs = await scrape_jobs(site_name, enrich=True)
+        jobs = await scrape_jobs(site_name, filters=filters, enrich=False)
         all_jobs.extend(jobs)
 
     print(f"\n{'─'*60}")

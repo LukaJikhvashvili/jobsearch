@@ -3,7 +3,7 @@
   "base_url": "https://jobs.ge",
   "listings_url": "https://jobs.ge/en/",
   "listings": {
-    "container": "#job_list_table tbody tr:not(:first-child)",
+    "container": "#job_list_table tr:not(:first-child)",
     "fields": {
       "title": {
         "selector": "a.vip",
@@ -14,21 +14,6 @@
         "selector": "td:nth-child(4) a",
         "attr": "text",
         "confidence": 0.9
-      },
-      "location": {
-        "selector": "i",
-        "attr": "text",
-        "confidence": 0.8
-      },
-      "salary": {
-        "selector": null,
-        "attr": "text",
-        "confidence": 1.0
-      },
-      "posted_date": {
-        "selector": "td:nth-child(5)",
-        "attr": "text",
-        "confidence": 1.0
       }
     },
     "pagination": {
@@ -36,7 +21,7 @@
       "param_name": null,
       "start_page": 1,
       "next_selector": null,
-      "max_pages": 50,
+      "max_pages": 1,
       "delay_ms": 1200
     },
     "navigation": {
@@ -45,43 +30,95 @@
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The table structure uses a specific row format. The first row is a header, so the container selector excludes it."
+      "notes": "The title link points directly to the detail page."
+    },
+    "filters": {
+      "available": [
+        {
+          "dimension": "keyword",
+          "mechanism": "search_field",
+          "param_name": "q",
+          "selector": "input[name='q']",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": null
+        },
+        {
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": "cid",
+          "selector": "select[name='cid']",
+          "options_selector": "select[name='cid'] option",
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": null
+        },
+        {
+          "dimension": "location",
+          "mechanism": "dropdown",
+          "param_name": "lid",
+          "selector": "select[name='lid']",
+          "options_selector": "select[name='lid'] option",
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": null
+        }
+      ],
+      "submit_selector": ".searchBtn a",
+      "notes": null
     }
   },
   "detail": {
     "fields": {
-      "description": {
-        "selector": "table.dtable > tbody > tr:nth-child(4) > td",
-        "attr": "html",
-        "confidence": 1.0
+      "location": {
+        "selector": null,
+        "attr": "text",
+        "confidence": 0.0
       },
-      "requirements": {
-        "selector": "table.dtable > tbody > tr:nth-child(4) > td",
+      "salary": {
+        "selector": null,
+        "attr": "text",
+        "confidence": 0.0
+      },
+      "posted_date": {
+        "selector": "table.dtable tr:nth-child(3) b:first-child",
+        "attr": "text",
+        "confidence": 0.9
+      },
+      "description": {
+        "selector": "table.dtable tr:nth-child(4) td",
         "attr": "html",
         "confidence": 0.8
       },
-      "salary": {
-        "selector": "table.dtable > tbody > tr:nth-child(4) > td",
-        "attr": "text",
-        "confidence": 0.7
+      "requirements": {
+        "selector": null,
+        "attr": "html",
+        "confidence": 0.0
       }
     },
     "application": {
-      "method": "email",
+      "method": "unknown",
       "form_selector": null,
       "apply_button_selector": null,
       "external_url_selector": null,
-      "email_selector": "a[href^='mailto:']",
+      "email_selector": null,
       "ats_domain": null,
       "confidence": 1.0,
-      "notes": "Application is handled via a mailto link found within the job description text."
+      "notes": "The page does not contain an application form, email, or external link. It appears to be a listing site where contact details might be provided in the full text or via external contact methods not present in this snippet."
     }
   },
   "requires_js": false,
   "requires_auth": false,
-  "overall_confidence": 0.9,
-  "generated_at": "2026-04-20T17:19:53.595405",
+  "overall_confidence": 0.85,
+  "generated_at": "2026-04-20T18:45:56.826847",
   "version": 1,
   "is_stale": false,
-  "notes": "The job description, requirements, and salary information are all contained within a single table cell. Parsing logic will need to extract specific sections from that block."
+  "notes": "The job description is very brief and refers to a Georgian version for full details. No specific application method is visible on this page."
 }
