@@ -1,7 +1,7 @@
 {
   "site": "jobs.ge",
   "base_url": "https://jobs.ge",
-  "listings_url": "https://jobs.ge/en/",
+  "listings_url": "https://jobs.ge/",
   "listings": {
     "container": "#job_list_table tr:not(:first-child)",
     "fields": {
@@ -30,7 +30,7 @@
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The title link points directly to the detail page."
+      "notes": "The title link points directly to the job detail page."
     },
     "filters": {
       "available": [
@@ -88,14 +88,14 @@
         "confidence": 0.0
       },
       "posted_date": {
-        "selector": "table.dtable tr:nth-child(3) b:first-child",
+        "selector": ".dtable tr:nth-child(3) b:first-child",
         "attr": "text",
         "confidence": 0.9
       },
       "description": {
-        "selector": "table.dtable tr:nth-child(4) td",
+        "selector": ".dtable tr:nth-child(4) td",
         "attr": "html",
-        "confidence": 0.8
+        "confidence": 0.9
       },
       "requirements": {
         "selector": null,
@@ -104,21 +104,21 @@
       }
     },
     "application": {
-      "method": "unknown",
+      "method": "ats_redirect",
       "form_selector": null,
-      "apply_button_selector": null,
-      "external_url_selector": null,
+      "apply_button_selector": ".dtable tr:nth-child(4) td a",
+      "external_url_selector": ".dtable tr:nth-child(4) td a",
       "email_selector": null,
-      "ats_domain": null,
-      "confidence": 1.0,
-      "notes": "The page does not contain an application form, email, or external link. It appears to be a listing site where contact details might be provided in the full text or via external contact methods not present in this snippet."
+      "ats_domain": "hirehive.com",
+      "confidence": 0.9,
+      "notes": "The link in the description redirects to an external ATS (hirehive.com)."
     }
   },
   "requires_js": false,
   "requires_auth": false,
   "overall_confidence": 0.85,
-  "generated_at": "2026-04-20T18:45:56.826847",
+  "generated_at": "2026-04-21T18:33:30.489879",
   "version": 1,
   "is_stale": false,
-  "notes": "The job description is very brief and refers to a Georgian version for full details. No specific application method is visible on this page."
+  "notes": "The job title in the header (Cashier-Operator) contradicts the description (Android Developer). The application link is embedded within the description text."
 }

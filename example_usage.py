@@ -109,8 +109,10 @@ async def refresh_stale(sites: dict[str, str]) -> None:
 # ---------------------------------------------------------------------------
 
 SITES = {
-    "jobs.ge": "https://jobs.ge/en/",
+    "jobs.ge": "https://jobs.ge/",
     "hr.ge": "https://hr.ge",
+    "awork.ge": "https://awork.ge/user/vacancy/",
+    "myjobs.ge": "https://myjobs.ge/ka/vacancy",
 }
 
 
@@ -119,7 +121,7 @@ async def main():
         if store.needs_refresh(site_name):
             await generate_adapter(site_name, listings_url)
 
-    filters = UserFilters(keyword="analyst", date_posted="last_7_days", location="Kutaisi")
+    filters = UserFilters(keyword="ანალიტიკოსი", date_posted="last_7_days", location="თბილისი")
 
     all_jobs: list[JobListing] = []
     for site_name in SITES:

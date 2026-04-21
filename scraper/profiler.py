@@ -81,8 +81,8 @@ class SiteProfiler:
         await listings_page.wait_for_timeout(self.wait_ms)
 
         # Mild scroll to trigger lazy-loaded cards
-        await listings_page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.4)")
-        await listings_page.wait_for_timeout(800)
+        await listings_page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.8)")
+        await listings_page.wait_for_timeout(1200)
 
         raw_listings_html = await listings_page.content()
         listings_html = clean_html(raw_listings_html, max_chars=40_000)
