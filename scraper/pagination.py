@@ -1,20 +1,19 @@
 """
-Pagination strategies for the Playwright-based scraper runner.
+Pagination strategies.
 
-Each strategy is an async generator that yields a Page object once per
-"page of results". The runner reads job cards from the yielded page,
-then the generator advances to the next page.
-
-Strategies:
-  NoPagination         — single page, yield once
-  UrlParamPagination   — ?page=N style, increments until empty
-  NextButtonPagination — clicks the Next button until it disappears / is disabled
-  InfiniteScrollPagination — scrolls to bottom until height stabilises, then yields once
+Root causes of the original failures:
+  - InfiniteScrollPagination: used networkidle to detect new content, which
+    times out frequently. Fixed: count-based detection (card count stabilises).
+  - NextButtonPagination: used URL-change as loop guard, which breaks SPAs
+    that don't change the URL. Fixed: content-hash comparison instead.
+  - Both: _wait_settled called networkidle which is unreliable on SPA pages.
+    Fixed: prefer card-count stabilisation over networkidle.
 """
 
+import hashlib
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
 from playwright.async_api import Page
@@ -32,29 +31,47 @@ logger = logging.getLogger(__name__)
 class PaginationStrategy(ABC):
     def __init__(self, config: PaginationConfig, container_selector: str = ""):
         self.config = config
-        self.container_selector = container_selector  # used to detect empty pages
+        self.container_selector = container_selector
 
     @abstractmethod
     def pages(self, page: Page, start_url: str) -> AsyncIterator[Page]: ...
 
     async def _count_cards(self, page: Page) -> int:
         if not self.container_selector:
-            return 1  # assume non-empty if we have no selector to check
+            return 1
         try:
             return await page.locator(self.container_selector).count()
         except Exception:
             return 0
 
-    async def _wait_settled(self, page: Page) -> None:
-        """Wait for DOM to settle after navigation or interaction."""
+    async def _content_hash(self, page: Page) -> str:
+        """
+        Hash the current card list text — used to detect whether new content
+        loaded without relying on URL changes or networkidle.
+        """
         try:
-            await page.wait_for_load_state("networkidle", timeout=8_000)
+            sel = self.container_selector or "body"
+            text = await page.locator(sel).all_inner_texts()
+            return hashlib.md5("".join(text).encode()).hexdigest()
         except Exception:
-            # networkidle can time out on streaming pages — domcontentloaded is enough
-            try:
-                await page.wait_for_load_state("domcontentloaded", timeout=5_000)
-            except Exception:
-                pass
+            return ""
+
+    async def _wait_for_new_content(self, page: Page, prev_hash: str, max_wait_ms: int = 6_000, poll_ms: int = 400) -> bool:
+        """
+        Poll until content changes (new cards loaded) or timeout.
+        Returns True if new content detected, False if timed out.
+        """
+        elapsed = 0
+        while elapsed < max_wait_ms:
+            await page.wait_for_timeout(poll_ms)
+            elapsed += poll_ms
+            new_hash = await self._content_hash(page)
+            if new_hash and new_hash != prev_hash:
+                return True
+        return False
+
+    async def _settle(self, page: Page) -> None:
+        """Light settle: just wait the configured delay. No networkidle."""
         await page.wait_for_timeout(self.config.delay_ms)
 
 
@@ -69,17 +86,11 @@ class NoPagination(PaginationStrategy):
 
 
 # ---------------------------------------------------------------------------
-# URL parameter pagination  (?page=2, ?page=3 …)
+# URL parameter
 # ---------------------------------------------------------------------------
 
 
 class UrlParamPagination(PaginationStrategy):
-    """
-    Increments a query-string parameter (default: 'page') from start_page
-    until a page returns 0 job cards or max_pages is reached.
-    Also handles path-segment pagination: /jobs/2/, /jobs/3/
-    """
-
     async def pages(self, page: Page, start_url: str) -> AsyncIterator[Page]:
         parsed = urlparse(start_url)
         param = self.config.param_name or "page"
@@ -93,93 +104,113 @@ class UrlParamPagination(PaginationStrategy):
             logger.debug("UrlParam → %s", url)
 
             await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            await self._wait_settled(page)
+            await self._settle(page)
 
             count = await self._count_cards(page)
             if count == 0:
                 consecutive_empty += 1
                 if consecutive_empty >= 2:
-                    logger.info("Two consecutive empty pages — stopping at page %d", page_num)
+                    logger.info("Two consecutive empty pages — stopping at p%d", page_num)
                     break
                 continue
-            else:
-                consecutive_empty = 0
-
+            consecutive_empty = 0
             yield page
 
     @staticmethod
     def _build_url(parsed, param: str, page_num: int) -> str:
         qs = parse_qs(parsed.query, keep_blank_values=True)
         qs[param] = [str(page_num)]
-        new_query = urlencode({k: v[0] for k, v in qs.items()})
-        return urlunparse(parsed._replace(query=new_query))
+        return urlunparse(parsed._replace(query=urlencode({k: v[0] for k, v in qs.items()})))
 
 
 # ---------------------------------------------------------------------------
-# Next-button pagination
+# Next-button
 # ---------------------------------------------------------------------------
 
 
 class NextButtonPagination(PaginationStrategy):
     """
-    Clicks a 'Next' button or link after processing each page.
-    Stops when:
-      - the button is not found
-      - the button is disabled (disabled attr or aria-disabled=true)
-      - the URL has not changed after clicking (loop guard)
-      - max_pages reached
+    Fixed:
+    - Content-hash loop guard (works on SPAs that don't change URL)
+    - Disabled state checks cover more patterns
+    - Scroll button into view before clicking (avoids click interception)
+    - After click, waits for content change rather than networkidle
     """
 
     async def pages(self, page: Page, start_url: str) -> AsyncIterator[Page]:
-        visited_urls: set[str] = set()
         page_count = 0
 
         while page_count < self.config.max_pages:
-            current_url = page.url
-            if current_url in visited_urls:
-                logger.info("URL repeated — pagination loop detected, stopping")
-                break
-            visited_urls.add(current_url)
             page_count += 1
+            yield page  # runner processes this page
 
-            yield page  # ← runner reads this page
-
-            # Find the next button AFTER the runner has finished with this page
             selector = self.config.next_selector
             if not selector:
-                logger.warning("next_selector is empty — cannot paginate")
+                logger.warning("next_selector missing — stopping")
                 break
 
             btn = page.locator(selector).first
 
+            # ── Visibility ──────────────────────────────────────────────────
             try:
-                visible = await btn.is_visible(timeout=3_000)
+                visible = await btn.is_visible(timeout=4_000)
             except Exception:
                 visible = False
-
             if not visible:
-                logger.info("Next button not visible — end of results")
+                logger.info("Next button gone — end of results (page %d)", page_count)
                 break
 
-            # Check for disabled state
-            disabled = await btn.get_attribute("disabled")
-            aria_disabled = await btn.get_attribute("aria-disabled")
-            css_class = await btn.get_attribute("class") or ""
-            if disabled is not None or aria_disabled == "true" or "disabled" in css_class.lower():
-                logger.info("Next button disabled — end of results")
+            # ── Disabled check — multiple patterns ───────────────────────────
+            if await self._is_disabled(btn):
+                logger.info("Next button disabled — end of results (page %d)", page_count)
                 break
 
-            logger.debug("Clicking next button (page %d)", page_count)
-            await btn.click()
-            await self._wait_settled(page)
+            # ── Capture state before click ───────────────────────────────────
+            prev_hash = await self._content_hash(page)
 
-            # Guard: if URL didn't change and card count is the same,
-            # we're stuck (some sites re-render without navigating)
-            if page.url == current_url:
+            # ── Scroll into view, then click ─────────────────────────────────
+            try:
+                await btn.scroll_into_view_if_needed(timeout=3_000)
+            except Exception:
+                pass
+
+            logger.debug("Clicking next (page %d)", page_count)
+            try:
+                await btn.click(timeout=5_000)
+            except Exception as exc:
+                logger.warning("Next button click failed: %s", exc)
+                break
+
+            # ── Wait for new content ─────────────────────────────────────────
+            changed = await self._wait_for_new_content(page, prev_hash, max_wait_ms=8_000)
+            if not changed:
+                # Content didn't change — check if we're really at the end
                 new_count = await self._count_cards(page)
                 if new_count == 0:
-                    logger.info("URL unchanged and 0 cards — stopping")
+                    logger.info("Content unchanged and 0 cards — end of results")
                     break
+                # Content same but not empty → might be a legitimate duplicate; stop
+                logger.info("Content unchanged after next-click — stopping to avoid loop")
+                break
+
+    @staticmethod
+    async def _is_disabled(btn) -> bool:
+        try:
+            disabled = await btn.get_attribute("disabled")
+            aria_dis = await btn.get_attribute("aria-disabled")
+            css_class = (await btn.get_attribute("class") or "").lower()
+            aria_cur = (await btn.get_attribute("aria-current") or "").lower()
+            if disabled is not None:
+                return True
+            if aria_dis in ("true", "1"):
+                return True
+            if any(w in css_class for w in ("disabled", "inactive", "is-disabled")):
+                return True
+            if "last" in aria_cur:
+                return True
+        except Exception:
+            pass
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -189,56 +220,71 @@ class NextButtonPagination(PaginationStrategy):
 
 class InfiniteScrollPagination(PaginationStrategy):
     """
-    Scrolls the page to the bottom repeatedly until document height stops
-    growing. Yields the fully-loaded page ONCE at the end so the runner
-    gets all cards in a single pass (avoids deduplication complexity).
-
-    max_pages here acts as max scroll rounds.
+    Fixed:
+    - Uses card COUNT stabilisation (not document height) as the stop signal.
+      Height can stabilise while cards are still loading; count is more reliable.
+    - Scrolls in smaller steps (viewport height) instead of jumping to the
+      bottom in one go — some virtual-scroll implementations only load when
+      the sentinel enters the viewport gradually.
+    - Handles "Load more" button as a mid-scroll action.
+    - Yields ALL cards at once at the end (single yield, no dedup complexity).
     """
 
     async def pages(self, page: Page, start_url: str) -> AsyncIterator[Page]:
-        prev_height: int = 0
-        stall_rounds: int = 0
-        max_stalls: int = 3  # how many consecutive unchanged-height rounds before we stop
-        scroll_round: int = 0
+        prev_count = -1
+        stall_rounds = 0
+        max_stalls = 4  # consecutive same-count rounds before stopping
+        scroll_round = 0
 
-        logger.info("Infinite scroll: starting on %s", page.url)
+        logger.info("InfiniteScroll starting on %s", page.url)
 
         while scroll_round < self.config.max_pages:
-            current_height: int = await page.evaluate("document.body.scrollHeight")
+            scroll_round += 1
 
-            if current_height == prev_height:
-                stall_rounds += 1
-                logger.debug("Scroll stall %d/%d (height=%d)", stall_rounds, max_stalls, current_height)
-                if stall_rounds >= max_stalls:
-                    logger.info("Height stabilised — all content loaded (%d rounds)", scroll_round)
-                    break
-            else:
-                stall_rounds = 0
-                logger.debug("Scrolled to %d (was %d)", current_height, prev_height)
+            # Scroll one viewport at a time
+            await page.evaluate(
+                """
+                window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+            """
+            )
+            await page.wait_for_timeout(self.config.delay_ms)
 
-            prev_height = current_height
-
-            # Scroll to bottom
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-
-            # Let new items load
-            await self._wait_settled(page)
-
-            # Some pages use a "Load more" button instead of auto-loading;
-            # try clicking it if present (best-effort)
+            # Click "Load more" button if present
             if self.config.next_selector:
                 btn = page.locator(self.config.next_selector).first
                 try:
-                    if await btn.is_visible(timeout=1_000):
+                    if await btn.is_visible(timeout=800):
                         await btn.click()
-                        await self._wait_settled(page)
+                        await page.wait_for_timeout(self.config.delay_ms)
+                        logger.debug("Clicked load-more (round %d)", scroll_round)
                 except Exception:
                     pass
 
-            scroll_round += 1
+            current_count = await self._count_cards(page)
+            logger.debug(
+                "Scroll round %d: %d cards (was %d)",
+                scroll_round,
+                current_count,
+                prev_count,
+            )
 
-        # Single yield with all content
+            if current_count == prev_count:
+                stall_rounds += 1
+                if stall_rounds >= max_stalls:
+                    logger.info(
+                        "Card count stabilised at %d after %d rounds — done",
+                        current_count,
+                        scroll_round,
+                    )
+                    break
+            else:
+                stall_rounds = 0
+                prev_count = current_count
+
+        # Scroll back to top so cards are in natural DOM order
+        await page.evaluate("window.scrollTo(0, 0)")
+        await page.wait_for_timeout(300)
+
         yield page
 
 
@@ -254,5 +300,4 @@ def get_pagination_strategy(config: PaginationConfig, container_selector: str = 
         PaginationType.NEXT_BUTTON: NextButtonPagination,
         PaginationType.INFINITE_SCROLL: InfiniteScrollPagination,
     }
-    cls = mapping.get(config.type, NoPagination)
-    return cls(config, container_selector)
+    return mapping.get(config.type, NoPagination)(config, container_selector)

@@ -1,36 +1,36 @@
 {
   "site": "hr.ge",
   "base_url": "https://www.hr.ge",
-  "listings_url": "https://www.hr.ge",
+  "listings_url": "https://www.hr.ge/search-posting",
   "listings": {
     "container": "app-announcement-item",
     "fields": {
       "title": {
-        "selector": "a.title",
+        "selector": ".title",
         "attr": "text",
         "confidence": 1.0
       },
       "company": {
-        "selector": "a.company__title",
+        "selector": ".company__title",
         "attr": "text",
         "confidence": 1.0
       }
     },
     "pagination": {
-      "type": "none",
-      "param_name": null,
+      "type": "url_param",
+      "param_name": "pg",
       "start_page": 1,
-      "next_selector": null,
-      "max_pages": 50,
+      "next_selector": ".paging-container a[href*='pg=2']",
+      "max_pages": 33,
       "delay_ms": 1200
     },
     "navigation": {
       "type": "direct_link",
-      "link_selector": "a.title",
+      "link_selector": ".title",
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": null
+      "notes": "The title element contains an <a> tag with the href to the detail page."
     },
     "filters": {
       "available": [
@@ -38,7 +38,7 @@
           "dimension": "keyword",
           "mechanism": "search_field",
           "param_name": null,
-          "selector": "#lbl-search",
+          "selector": ".search-query",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
@@ -50,35 +50,23 @@
           "dimension": "category",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": "hrra-specialization-tree-select p-treeselect",
-          "options_selector": null,
+          "selector": ".ann-type-dropdown",
+          "options_selector": ".ann-type-dropdown option",
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 0.8,
-          "notes": "Uses PrimeNG treeselect component"
-        },
-        {
-          "dimension": "location",
-          "mechanism": "dropdown",
-          "param_name": null,
-          "selector": "hrra-location-tree-select p-treeselect",
-          "options_selector": null,
-          "item_selector": null,
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "confidence": 0.8,
-          "notes": "Uses PrimeNG treeselect component"
+          "confidence": 0.9,
+          "notes": null
         }
       ],
-      "submit_selector": ".search-btn__item",
+      "submit_selector": ".search-btn",
       "notes": null
     }
   },
   "detail": {
     "fields": {
       "location": {
-        "selector": ".location-items",
+        "selector": ".location-items .locaion-item",
         "attr": "text",
         "confidence": 1.0
       },
@@ -111,13 +99,13 @@
       "email_selector": null,
       "ats_domain": null,
       "confidence": 0.9,
-      "notes": "The site uses an internal 'simple feedback' system (on-page modal) triggered by the button, not an external ATS."
+      "notes": "The site uses a custom 'simple feedback' (send-cv-button-ats) mechanism which triggers an internal application flow."
     }
   },
   "requires_js": true,
   "requires_auth": false,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-21T18:34:11.560872",
+  "generated_at": "2026-04-22T13:39:37.644564",
   "version": 1,
   "is_stale": false,
   "notes": null

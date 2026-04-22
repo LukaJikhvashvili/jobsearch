@@ -3,34 +3,34 @@
   "base_url": "https://jobs.ge",
   "listings_url": "https://jobs.ge/",
   "listings": {
-    "container": "#job_list_table tr:not(:first-child)",
+    "container": "tr:has(a[href*='view=jobs&id='])",
     "fields": {
       "title": {
-        "selector": "a.vip",
+        "selector": "td:nth-child(2) a.vip",
         "attr": "text",
         "confidence": 1.0
       },
       "company": {
         "selector": "td:nth-child(4) a",
         "attr": "text",
-        "confidence": 0.9
+        "confidence": 1.0
       }
     },
     "pagination": {
-      "type": "none",
-      "param_name": null,
+      "type": "url_param",
+      "param_name": "page",
       "start_page": 1,
       "next_selector": null,
-      "max_pages": 1,
+      "max_pages": 50,
       "delay_ms": 1200
     },
     "navigation": {
       "type": "direct_link",
-      "link_selector": "a.vip",
+      "link_selector": "td:nth-child(2) a.vip",
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The title link points directly to the job detail page."
+      "notes": "The job title link points directly to the detail page via the id parameter."
     },
     "filters": {
       "available": [
@@ -51,20 +51,44 @@
           "mechanism": "dropdown",
           "param_name": "cid",
           "selector": "select[name='cid']",
-          "options_selector": "select[name='cid'] option",
+          "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": null
+          "notes": "Filter for job categories."
         },
         {
           "dimension": "location",
           "mechanism": "dropdown",
           "param_name": "lid",
           "selector": "select[name='lid']",
-          "options_selector": "select[name='lid'] option",
+          "options_selector": null,
           "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": "Filter for cities and regions."
+        },
+        {
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": "jid",
+          "selector": "select[name='jid']",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 0.9,
+          "notes": "Filter for announcement types (Vacancies, Tenders, etc)."
+        },
+        {
+          "dimension": "salary",
+          "mechanism": "checkbox_group",
+          "param_name": "has_salary",
+          "selector": ".checkitems",
+          "options_selector": null,
+          "item_selector": "input[name='has_salary']",
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
@@ -72,53 +96,53 @@
         }
       ],
       "submit_selector": ".searchBtn a",
-      "notes": null
+      "notes": "The search form uses a GET method; filters can be applied via URL parameters or by clicking the search icon which triggers a JS submit."
     }
   },
   "detail": {
     "fields": {
       "location": {
-        "selector": null,
+        "selector": "#job > span > i",
         "attr": "text",
-        "confidence": 0.0
+        "confidence": 0.95
       },
       "salary": {
         "selector": null,
         "attr": "text",
-        "confidence": 0.0
+        "confidence": 1.0
       },
       "posted_date": {
-        "selector": ".dtable tr:nth-child(3) b:first-child",
+        "selector": ".dtable tr:nth-child(3) b:nth-of-type(1)",
         "attr": "text",
         "confidence": 0.9
       },
       "description": {
         "selector": ".dtable tr:nth-child(4) td",
         "attr": "html",
-        "confidence": 0.9
+        "confidence": 0.95
       },
       "requirements": {
         "selector": null,
         "attr": "html",
-        "confidence": 0.0
+        "confidence": 1.0
       }
     },
     "application": {
-      "method": "ats_redirect",
+      "method": "external_link",
       "form_selector": null,
       "apply_button_selector": ".dtable tr:nth-child(4) td a",
       "external_url_selector": ".dtable tr:nth-child(4) td a",
       "email_selector": null,
-      "ats_domain": "hirehive.com",
-      "confidence": 0.9,
-      "notes": "The link in the description redirects to an external ATS (hirehive.com)."
+      "ats_domain": null,
+      "confidence": 1.0,
+      "notes": "The job description on this page is a summary that redirects to the company's own career portal for full details and application."
     }
   },
   "requires_js": false,
   "requires_auth": false,
-  "overall_confidence": 0.85,
-  "generated_at": "2026-04-21T18:33:30.489879",
+  "overall_confidence": 0.95,
+  "generated_at": "2026-04-22T12:49:34.889754",
   "version": 1,
   "is_stale": false,
-  "notes": "The job title in the header (Cashier-Operator) contradicts the description (Android Developer). The application link is embedded within the description text."
+  "notes": "The site uses a standard table-based layout for job details. Location and dates are clearly marked in the dtable class."
 }

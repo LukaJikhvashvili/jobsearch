@@ -1,7 +1,15 @@
+"""
+HTML cleaning utilities.
+
+Key design decision: we keep onclick, data-*, and aria-* attributes
+so the LLM can distinguish JS-driven navigation (card_click) from
+plain href links (direct_link). Without onclick, every card looks
+like a direct_link even if it has no <a> tag.
+"""
+
 import re
 from bs4 import BeautifulSoup, Comment
 
-# Tags that add no structural value and bloat the token count
 _NOISE_TAGS = [
     "script",
     "style",
@@ -14,62 +22,74 @@ _NOISE_TAGS = [
     "picture",
     "source",
     "link",
-    "meta",
-    "head",
-    "img",
+    "meta",  # keep <head> so pagination/title hints survive
 ]
 
-# Attributes worth keeping (everything else is stripped to reduce noise)
+# Attributes kept during cleaning.
+# onclick / data-* / aria-* are deliberately preserved — they reveal
+# JS navigation patterns the LLM needs to classify correctly.
 _KEEP_ATTRS = {
+    # Structure & identity
     "class",
     "id",
-    "href",
-    "src",
     "type",
     "name",
+    "role",
+    # Links & navigation
+    "href",
+    "src",
     "action",
     "method",
+    # Forms
     "placeholder",
-    "aria-label",
+    "value",
+    "for",
+    # JS navigation signals  ← THE FIX for card_click detection
+    "onclick",
     "data-url",
     "data-href",
     "data-link",
+    "data-id",
+    "data-job-id",
+    "data-vacancy-id",
+    # Accessibility (helps LLM understand interactive elements)
+    "aria-label",
+    "aria-disabled",
+    "aria-selected",
+    # Generic data-* pass-through handled separately below
 }
 
 
-def clean_html(html: str, max_chars: int = 40_000) -> str:
+def clean_html(html: str, max_chars: int = 40_000, keep_data_attrs: bool = True) -> str:
     """
-    Strip scripts, styles, comments and noisy attributes from raw HTML.
-    Returns a compact string safe to send to an LLM.
+    Strip noise but preserve JS navigation signals and data attributes.
     """
     soup = BeautifulSoup(html, "lxml")
 
-    # Remove noisy tags entirely
     for tag in soup(_NOISE_TAGS):
         tag.decompose()
 
-    # Remove HTML comments
     for node in soup.find_all(string=lambda t: isinstance(t, Comment)):
         node.extract()
 
-    # Remove elements hidden via inline style
     hidden_re = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden", re.I)
     for tag in soup.find_all(style=hidden_re):
         tag.decompose()
 
-    # Strip non-essential attributes from every remaining tag
     for tag in soup.find_all(True):
-        keep = {k: v for k, v in tag.attrs.items() if k in _KEEP_ATTRS}
+        keep = {}
+        for k, v in tag.attrs.items():
+            if k in _KEEP_ATTRS:
+                keep[k] = v
+            elif keep_data_attrs and k.startswith("data-"):
+                keep[k] = v  # keep ALL data-* attributes
         tag.attrs = keep
 
     cleaned = str(soup)
-
-    # Collapse runs of whitespace / blank lines
     cleaned = re.sub(r"[ \t]+", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     cleaned = re.sub(r">\s+<", "><", cleaned)
 
-    # Hard truncate with a best-effort attempt to end on a tag boundary
     if len(cleaned) > max_chars:
         truncated = cleaned[:max_chars]
         boundary = truncated.rfind("</")
@@ -78,3 +98,41 @@ def clean_html(html: str, max_chars: int = 40_000) -> str:
         cleaned = truncated
 
     return cleaned.strip()
+
+
+def extract_pagination_area(html: str, max_chars: int = 8_000) -> str:
+    """
+    Extract the bottom portion of the page where pagination controls live.
+    Also checks for common pagination wrapper selectors.
+    """
+    soup = BeautifulSoup(html, "lxml")
+
+    # Try common pagination container selectors first
+    pagination_selectors = [
+        "[class*='pagination']",
+        "[class*='paging']",
+        "[class*='pages']",
+        "[id*='pagination']",
+        "[id*='paging']",
+        "nav[aria-label*='page']",
+        ".load-more",
+        "[class*='load-more']",
+        "[class*='infinite']",
+        "[data-infinite]",
+    ]
+    for sel in pagination_selectors:
+        try:
+            el = soup.select_one(sel)
+            if el:
+                return clean_html(str(el), max_chars)
+        except Exception:
+            continue
+
+    # Fallback: last 25% of body HTML
+    body = soup.find("body")
+    if body:
+        body_str = str(body)
+        bottom = body_str[int(len(body_str) * 0.75) :]
+        return clean_html(bottom, max_chars)
+
+    return ""
