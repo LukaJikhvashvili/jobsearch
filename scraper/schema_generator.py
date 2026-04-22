@@ -172,11 +172,17 @@ OUTPUT SCHEMA — fill every key, null for absent:
 }}"""
 
 
-def _phase1_user(site: str, listings_url: str, listings_html: str) -> str:
+# NEW
+def _phase1_user(site: str, listings_url: str, listings_html: str, pagination_html: str = "") -> str:
+    pagination_section = f"\n=== PAGINATION AREA HTML (bottom of page) ===\n{pagination_html}\n" if pagination_html else ""
     return (
         f"Site: {site}\n"
         f"Listings URL: {listings_url}\n\n"
-        f"=== LISTINGS PAGE HTML ===\n{listings_html}\n\n"
+        f"=== SAMPLE JOB CARDS HTML (3 cards, post-JS render) ===\n{listings_html}\n"
+        f"{pagination_section}\n"
+        "IMPORTANT: The HTML above is the RENDERED DOM captured by a real browser after "
+        "JavaScript execution. onclick attributes, data-* attributes, and dynamically "
+        "inserted content are all present. Use them to determine navigation type.\n\n"
         "Analyse this listings page and return the Phase 1 JSON."
     )
 
@@ -319,7 +325,20 @@ def _strip_fences(text: str) -> str:
 
 
 def _parse(raw: str) -> dict:
-    return json.loads(_strip_fences(raw))
+    stripped = _strip_fences(raw)
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError as e:
+        logger.warning("JSON parse failed, attempting recovery: %s", e)
+        # Simple recovery for truncated LLM output
+        if not stripped.endswith("}"):
+            logger.info("Attempting to close unclosed JSON object")
+            stripped += "}"
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            logger.error("Failed to parse JSON even after recovery:\n%s", stripped)
+            raise
 
 
 def _build_partial_from_phase1(data: dict, site: str, listings_url: str) -> dict:
@@ -354,8 +373,9 @@ class SchemaGenerator:
         self.primary = primary
         self.fallback = fallback
 
-    def generate_phase1(self, site: str, listings_url: str, listings_html: str) -> dict:
-        raw = self._call(_PHASE1_SYSTEM, _phase1_user(site, listings_url, listings_html), site, 1)
+    # NEW
+    def generate_phase1(self, site: str, listings_url: str, listings_html: str, pagination_html: str = "") -> dict:
+        raw = self._call(_PHASE1_SYSTEM, _phase1_user(site, listings_url, listings_html, pagination_html), site, 1)
         data = _parse(raw)
         partial = _build_partial_from_phase1(data, site, listings_url)
         filters = partial.get("listings", {}).get("filters", {})

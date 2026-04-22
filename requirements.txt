@@ -12,3 +12,4 @@ anthropic                # Claude Haiku (fallback)
 
 # Utilities
 python-dotenv
+rapidfuzz

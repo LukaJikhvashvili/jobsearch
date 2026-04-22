@@ -30,12 +30,30 @@ from .models import (
     UserFilters,
 )
 from .pagination import get_pagination_strategy
+from .filter_match import matches as fuzzy_matches
 
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " "AppleWebKit/537.36 (KHTML, like Gecko) " "Chrome/124.0.0.0 Safari/537.36"
 )
+
+# Map UserFilters fields → FilterDimension
+_DIM_MAP: dict[str, FilterDimension] = {
+    "keyword": FilterDimension.KEYWORD,
+    "location": FilterDimension.LOCATION,
+    "category": FilterDimension.CATEGORY,
+    "salary_min": FilterDimension.SALARY,
+    "date_posted": FilterDimension.DATE_POSTED,
+}
+
+# How "date_posted" string values map to URL param values most sites use
+_DATE_PARAM_MAP = {
+    "today": ["today", "1", "24h", "day"],
+    "week": ["week", "7", "7d"],
+    "month": ["month", "30", "30d"],
+    "3months": ["3months", "90", "90d"],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +218,10 @@ class ScraperRunner:
             if value is None or not entry.param_name:
                 continue
 
+            if entry.dimension == FilterDimension.DATE_POSTED:
+                # Map human-readable value to site-specific param value
+                value = self._map_date_param(value, entry)
+
             if value:
                 qs[entry.param_name] = [str(value)]
                 logger.debug("URL filter: %s=%s", entry.param_name, value)
@@ -209,8 +231,8 @@ class ScraperRunner:
 
     async def _apply_dom_filters(self, page: Page, filters_config: FiltersConfig, user_filters: UserFilters) -> None:
         """
-        Apply all DOM-based filter interactions in order, then click
-        the submit button if one is configured.
+        Apply all DOM-based filter interactions in order, click submit if
+        configured, then VERIFY that the result set actually changed.
         """
         dom_mechanisms = {
             FilterMechanism.SEARCH_FIELD,
@@ -235,19 +257,72 @@ class ScraperRunner:
                 if success:
                     applied_any = True
                     logger.info("Filter applied: %s=%s (%s)", entry.dimension, value, entry.mechanism)
+                else:
+                    logger.warning("Filter NOT applied (no match): %s=%s", entry.dimension, value)
             except Exception as exc:
                 logger.warning("Filter failed: %s=%s — %s", entry.dimension, value, exc)
 
-        # Click submit button if any DOM filter was applied and a button exists
-        if applied_any and filters_config.submit_selector:
+        if not applied_any:
+            return
+
+        # ── Submit button ──────────────────────────────────────────────────
+        if filters_config.submit_selector:
             try:
                 btn = page.locator(filters_config.submit_selector).first
                 if await btn.is_visible(timeout=3_000):
                     await btn.click()
-                    await page.wait_for_load_state("networkidle", timeout=10_000)
                     logger.info("Clicked submit: %s", filters_config.submit_selector)
             except Exception as exc:
                 logger.warning("Submit click failed: %s", exc)
+
+        # ── Confirm filters actually loaded ────────────────────────────────
+        # Strategy: wait up to 8s for the card count to change OR for
+        # networkidle; whichever comes first.
+        confirmed = await self._wait_for_filter_confirmation(page)
+        if confirmed:
+            logger.info("Filter results confirmed (%d cards)", await self._count_cards(page))
+        else:
+            logger.warning("Filter confirmation timed out — proceeding anyway")
+
+    async def _count_cards(self, page: Page) -> int:
+        sel = self.adapter.listings.container
+        try:
+            return await page.locator(sel).count()
+        except Exception:
+            return 0
+
+    async def _wait_for_filter_confirmation(self, page: Page, max_wait_ms: int = 8_000, poll_ms: int = 300) -> bool:
+        """
+        Poll until:
+          - card count changes from the pre-filter count, OR
+          - networkidle fires (page finished loading), OR
+          - timeout
+
+        Returns True if we got a clear confirmation signal.
+        """
+        # Capture current state
+        before_count = await self._count_cards(page)
+        before_url = page.url
+
+        # Try networkidle first (covers full-page-reload filter submissions)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=5_000)
+            after_count = await self._count_cards(page)
+            if page.url != before_url or after_count != before_count:
+                return True
+        except Exception:
+            pass
+
+        # Poll for card count change (covers SPA / AJAX filters)
+        elapsed = 0
+        while elapsed < max_wait_ms:
+            await page.wait_for_timeout(poll_ms)
+            elapsed += poll_ms
+            current = await self._count_cards(page)
+            if current != before_count:
+                return True
+
+        return False
 
     async def _apply_single_filter(self, page: Page, entry: FilterEntry, value: str) -> bool:
         """Dispatch to the right interaction for each filter mechanism."""
@@ -277,20 +352,35 @@ class ScraperRunner:
                 return True
             except Exception:
                 pass
-            # Fallback: find option whose text contains the value (case-insensitive)
-            matched = await page.evaluate(
-                """([sel, val]) => {
+            # Fallback: fuzzy match against all option texts
+            from .filter_match import best_match_score, THRESHOLD
+
+            options_info = await page.evaluate(
+                """([sel]) => {
                     const el = document.querySelector(sel);
-                    if (!el) return null;
-                    const opt = Array.from(el.options).find(
-                        o => o.text.toLowerCase().includes(val.toLowerCase())
-                    );
-                    if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change')); return opt.value; }
-                    return null;
+                    if (!el) return [];
+                    return Array.from(el.options).map((o, i) => ({i, text: o.text, value: o.value}));
                 }""",
-                [entry.selector, value],
+                [entry.selector],
             )
-            return matched is not None
+            best_score, best_val = 0, None
+            for opt in options_info:
+                score = best_match_score(value, opt["text"])
+                if score > best_score:
+                    best_score, best_val = score, opt["value"]
+            if best_val is not None and best_score >= THRESHOLD:
+                matched = await page.evaluate(
+                    """([sel, val]) => {
+                        const el = document.querySelector(sel);
+                        if (!el) return null;
+                        el.value = val;
+                        el.dispatchEvent(new Event('change'));
+                        return val;
+                    }""",
+                    [entry.selector, best_val],
+                )
+                return matched is not None
+            return False
 
         # ── Tag filter (pill buttons) ───────────────────────────────────────
         elif entry.mechanism == FilterMechanism.TAG_FILTER:
@@ -299,13 +389,19 @@ class ScraperRunner:
                 return False
             items = page.locator(item_sel)
             count = await items.count()
+            best_score, best_idx = 0, -1
             for i in range(count):
-                item = items.nth(i)
-                text = (await item.inner_text()).strip()
-                if value.lower() in text.lower():
-                    await item.click()
-                    await page.wait_for_timeout(400)
-                    return True
+                text = (await items.nth(i).inner_text()).strip()
+                score = __import__("scraper.filter_match", fromlist=["best_match_score"]).best_match_score(value, text)
+                if score > best_score:
+                    best_score, best_idx = score, i
+            from .filter_match import THRESHOLD
+
+            if best_idx >= 0 and best_score >= THRESHOLD:
+                await items.nth(best_idx).click()
+                await page.wait_for_timeout(400)
+                logger.debug("Tag filter matched '%s' → score %d", value, best_score)
+                return True
             return False
 
         # ── Checkbox group ──────────────────────────────────────────────────
@@ -313,46 +409,70 @@ class ScraperRunner:
             item_sel = entry.item_selector
             if not item_sel:
                 return False
-            # Checkboxes: find the one whose associated label contains value
-            matched = await page.evaluate(
-                """([sel, val]) => {
-                    const inputs = document.querySelectorAll(sel);
-                    for (const inp of inputs) {
-                        const label = inp.labels?.[0]?.textContent ||
-                                      inp.closest('label')?.textContent ||
-                                      inp.nextElementSibling?.textContent || '';
-                        if (label.toLowerCase().includes(val.toLowerCase())) {
-                            if (!inp.checked) inp.click();
-                            return label.trim();
-                        }
-                    }
-                    return null;
-                }""",
-                [item_sel, value],
-            )
-            return matched is not None
+            from .filter_match import best_match_score, THRESHOLD, translate
+
+            # Collect all labels with their indices
+            label_js = """([sel]) => {
+                const inputs = document.querySelectorAll(sel);
+                return Array.from(inputs).map((inp, i) => ({
+                    i,
+                    label: (inp.labels?.[0]?.textContent ||
+                            inp.closest('label')?.textContent ||
+                            inp.nextElementSibling?.textContent || '').trim(),
+                    checked: inp.checked
+                }));
+            }"""
+            items_info = await page.evaluate(label_js, [item_sel])
+            best_score, best_i = 0, -1
+            for info in items_info:
+                score = best_match_score(value, info["label"])
+                if score > best_score:
+                    best_score, best_i = score, info["i"]
+            if best_i >= 0 and best_score >= THRESHOLD:
+                matched = await page.evaluate(
+                    """([sel, idx]) => {
+                        const inp = document.querySelectorAll(sel)[idx];
+                        if (inp && !inp.checked) inp.click();
+                        return inp ? true : false;
+                    }""",
+                    [item_sel, best_i],
+                )
+                return bool(matched)
+            return False
 
         # ── Radio group ─────────────────────────────────────────────────────
         elif entry.mechanism == FilterMechanism.RADIO_GROUP:
             item_sel = entry.item_selector
             if not item_sel:
                 return False
-            matched = await page.evaluate(
-                """([sel, val]) => {
-                    const radios = document.querySelectorAll(sel);
-                    for (const r of radios) {
-                        const label = r.labels?.[0]?.textContent ||
-                                      r.closest('label')?.textContent ||
-                                      r.nextElementSibling?.textContent || '';
-                        if (label.toLowerCase().includes(val.toLowerCase())) {
-                            r.click(); return label.trim();
-                        }
-                    }
-                    return null;
-                }""",
-                [item_sel, value],
-            )
-            return matched is not None
+            from .filter_match import best_match_score, THRESHOLD
+
+            label_js = """([sel]) => {
+                const radios = document.querySelectorAll(sel);
+                return Array.from(radios).map((r, i) => ({
+                    i,
+                    label: (r.labels?.[0]?.textContent ||
+                            r.closest('label')?.textContent ||
+                            r.nextElementSibling?.textContent || '').trim()
+                }));
+            }"""
+            items_info = await page.evaluate(label_js, [item_sel])
+            best_score, best_i = 0, -1
+            for info in items_info:
+                score = best_match_score(value, info["label"])
+                if score > best_score:
+                    best_score, best_i = score, info["i"]
+            if best_i >= 0 and best_score >= THRESHOLD:
+                clicked = await page.evaluate(
+                    """([sel, idx]) => {
+                        const r = document.querySelectorAll(sel)[idx];
+                        if (r) r.click();
+                        return r ? true : false;
+                    }""",
+                    [item_sel, best_i],
+                )
+                return bool(clicked)
+            return False
 
         # ── Date range ──────────────────────────────────────────────────────
         elif entry.mechanism == FilterMechanism.DATE_RANGE:
@@ -385,6 +505,20 @@ class ScraperRunner:
         }
         return mapping.get(dimension)
 
+    @staticmethod
+    def _map_date_param(human_value: str, entry: FilterEntry) -> str:
+        """
+        Sites use different param values for recency. We can't know which one
+        a site uses ahead of time, so return the human value as-is.
+        The LLM-generated adapter's param_name already points to the right key;
+        the value the site accepts is whatever the site expects.
+
+        For now pass through unchanged. A future improvement can add a
+        per-site value_map in FilterEntry.
+        """
+        return human_value
+
+    # ================================================================== NAVIGATION
 
     @staticmethod
     def _url_from_soup(card: BeautifulSoup, nav: DetailNavigation, base_url: str) -> Optional[str]:
@@ -471,7 +605,7 @@ class ScraperRunner:
         app = self.adapter.detail.application
         method = app.method
         if app.confidence < 0.70:
-            method = self._heuristic_application_method(soup, listing.url or "")
+            method = self._heuristic_application_method(soup, html, listing.url or "")
         listing.application_method = method
         if method == ApplicationMethod.EMAIL:
             listing.application_email = self._find_email(soup, app.email_selector)
@@ -483,7 +617,7 @@ class ScraperRunner:
             listing.application_url = listing.url
         return listing
 
-    def _heuristic_application_method(self, soup, page_url) -> ApplicationMethod:
+    def _heuristic_application_method(self, soup, html, page_url) -> ApplicationMethod:
         from .schema_generator import ATS_DOMAINS
 
         base_domain = urlparse(page_url).netloc.lower()

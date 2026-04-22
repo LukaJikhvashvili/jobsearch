@@ -110,9 +110,9 @@ async def refresh_stale(sites: dict[str, str]) -> None:
 
 SITES = {
     "jobs.ge": "https://jobs.ge/",
-    "hr.ge": "https://hr.ge",
-    "awork.ge": "https://awork.ge/user/vacancy/",
-    "myjobs.ge": "https://myjobs.ge/ka/vacancy",
+    "hr.ge": "https://www.hr.ge/search-posting",
+    # "myjobs.ge": "https://myjobs.ge/ka/vacancy",
+    # "awork.ge": "https://awork.ge/user/vacancy/",
 }
 
 
