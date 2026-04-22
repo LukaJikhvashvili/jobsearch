@@ -333,7 +333,6 @@ class ScraperRunner:
                 return False
             inp = page.locator(entry.selector).first
             await inp.wait_for(state="visible", timeout=5_000)
-            await inp.triple_click()  # select all existing text
             await inp.fill(value)
             # Try pressing Enter to auto-submit; the submit button handles it otherwise
             await inp.press("Enter")
