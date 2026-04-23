@@ -30,7 +30,7 @@
       "data_attribute": null,
       "click_container": true,
       "confidence": 0.9,
-      "notes": "The card lacks an <a> tag and uses Angular-style components; navigation is triggered by a click event on the vacancy-card element."
+      "notes": "No <a> tag with a direct link to the vacancy is present in the card; navigation is likely handled by the Angular component's click event."
     },
     "filters": {
       "available": [
@@ -50,21 +50,21 @@
           "dimension": "category",
           "mechanism": "checkbox_group",
           "param_name": null,
-          "selector": "multi-selector[placeholder*='spheres']",
-          "options_selector": null,
-          "item_selector": ".form-check-input",
+          "selector": "multi-selector[placeholder='general.spheres.placeholder']",
+          "options_selector": ".dropdown-menu-container",
+          "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": null
+          "notes": "Custom multi-selector component"
         },
         {
           "dimension": "location",
           "mechanism": "checkbox_group",
           "param_name": null,
-          "selector": "multi-selector[placeholder*='cities']",
-          "options_selector": null,
-          "item_selector": ".form-check-input",
+          "selector": "multi-selector[placeholder='general.cities.city_or_region']",
+          "options_selector": ".dropdown-menu-container",
+          "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
@@ -72,23 +72,23 @@
         },
         {
           "dimension": "salary",
-          "mechanism": "checkbox_group",
+          "mechanism": "dropdown",
           "param_name": null,
           "selector": "salary-range-selector",
-          "options_selector": null,
-          "item_selector": ".form-check-input",
+          "options_selector": ".dropdown-menu",
+          "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 0.9,
-          "notes": "Contains a checkbox for 'only with salary' and a range slider."
+          "notes": "Uses a range slider and a checkbox for 'paid only'"
         },
         {
           "dimension": "date_posted",
           "mechanism": "radio_group",
           "param_name": null,
           "selector": "date-group-selector",
-          "options_selector": null,
-          "item_selector": ".form-check-input",
+          "options_selector": ".dropdown-menu-container",
+          "item_selector": "input[type='radio']",
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
@@ -96,53 +96,18 @@
         }
       ],
       "submit_selector": null,
-      "notes": "Filters appear to apply dynamically upon selection (Angular reactive forms)."
+      "notes": "Filters update the list dynamically via JS."
     }
   },
-  "detail": {
-    "fields": {
-      "location": {
-        "selector": ".overview-item:nth-child(1) .overview-item-info",
-        "attr": "text",
-        "confidence": 0.95
-      },
-      "salary": {
-        "selector": ".overview-item:nth-child(2) .overview-item-info",
-        "attr": "text",
-        "confidence": 0.95
-      },
-      "posted_date": {
-        "selector": ".vacancy-start-end-date span",
-        "attr": "text",
-        "confidence": 0.95
-      },
-      "description": {
-        "selector": ".job-detail-description",
-        "attr": "html",
-        "confidence": 0.95
-      },
-      "requirements": {
-        "selector": ".job-detail-description",
-        "attr": "html",
-        "confidence": 0.7
-      }
-    },
-    "application": {
-      "method": "on_page_form",
-      "form_selector": null,
-      "apply_button_selector": ".vacancy-send-col button.btn-brand",
-      "external_url_selector": null,
-      "email_selector": null,
-      "ats_domain": null,
-      "confidence": 0.9,
-      "notes": "The platform awork.ge uses an internal application system. While the form is not visible in the static HTML, the 'CV-ს გაგზავნა' button triggers the internal application process."
-    }
-  },
+  "detail": null,
+  "page_languages": [
+    "ka",
+    "en"
+  ],
   "requires_js": true,
-  "requires_auth": false,
-  "overall_confidence": 0.9,
-  "generated_at": "2026-04-22T14:12:29.233558",
+  "overall_confidence": 0.95,
+  "generated_at": "2026-04-23T21:24:26.525954",
   "version": 1,
   "is_stale": false,
-  "notes": "The page is an Angular application. Requirements are contained within the main description block under a specific bold header but lack a unique container."
+  "notes": "The site is a modern Angular application. Job cards are custom components without direct anchor tags, suggesting JS-based navigation."
 }
