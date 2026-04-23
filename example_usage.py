@@ -53,7 +53,6 @@ async def generate_adapter(site_name: str, listings_url: str) -> None:
 
     print(f"  Nav type:     {adapter.listings.navigation.type}")
     print(f"  Pagination:   {adapter.listings.pagination.type}")
-    print(f"  Apply method: {adapter.detail.application.method}")
     print(f"  Confidence:   {adapter.overall_confidence:.0%}")
 
     if adapter.overall_confidence < 0.60:
@@ -68,7 +67,7 @@ async def generate_adapter(site_name: str, listings_url: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def scrape_jobs(site_name: str, filters: UserFilters = None, enrich: bool = True) -> list[JobListing]:
+async def scrape_jobs(site_name: str, filters: UserFilters = None) -> list[JobListing]:
     adapter = store.load(site_name)
     if adapter is None:
         raise ValueError(f"No adapter for '{site_name}'. Run generate_adapter() first.")
@@ -79,13 +78,9 @@ async def scrape_jobs(site_name: str, filters: UserFilters = None, enrich: bool 
     print(f"\n── Scraping {site_name} ──")
 
     async with ScraperRunner(adapter, headless=False) as runner:
-        async for job in runner.run(filters=filters, enrich=enrich):
+        async for job in runner.run(filters=filters):
             jobs.append(job)
-            print(
-                f"  [{len(jobs):>3}] {job.title or '?':<45} "
-                f"{job.company or '?':<25} "
-                f"{job.application_method.value if job.application_method else '?'}"
-            )
+            print(f"  [{len(jobs):>3}] {job.title or '?':<45} " f"{job.company or '?':<25} ")
 
     print(f"\n  Total: {len(jobs)} jobs from {site_name}")
     return jobs
@@ -125,17 +120,11 @@ async def main():
 
     all_jobs: list[JobListing] = []
     for site_name in SITES:
-        jobs = await scrape_jobs(site_name, filters=filters, enrich=False)
+        jobs = await scrape_jobs(site_name, filters=filters)
         all_jobs.extend(jobs)
 
     print(f"\n{'─'*60}")
     print(f"Total: {len(all_jobs)} jobs")
-    by_method: dict[str, int] = {}
-    for j in all_jobs:
-        m = j.application_method.value if j.application_method else "unknown"
-        by_method[m] = by_method.get(m, 0) + 1
-    for method, count in sorted(by_method.items(), key=lambda x: -x[1]):
-        print(f"  {method:<20} {count}")
 
 
 if __name__ == "__main__":

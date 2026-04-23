@@ -94,7 +94,12 @@ class UrlParamPagination(PaginationStrategy):
     async def pages(self, page: Page, start_url: str) -> AsyncIterator[Page]:
         parsed = urlparse(start_url)
         param = self.config.param_name or "page"
-        consecutive_empty = 0
+
+        # Track card identifiers across pages.
+        # When a page adds zero new cards (all already seen), we've looped —
+        # the site is returning its last real page repeatedly.
+        seen_ids: set[str] = set()
+        consecutive_no_new = 0
 
         for page_num in range(
             self.config.start_page,
@@ -106,23 +111,65 @@ class UrlParamPagination(PaginationStrategy):
             await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
             await self._settle(page)
 
-            count = await self._count_cards(page)
-            if count == 0:
-                consecutive_empty += 1
-                if consecutive_empty >= 2:
-                    logger.info("Two consecutive empty pages — stopping at p%d", page_num)
+            # Collect card identifiers on this page
+            page_ids = await self._collect_card_ids(page)
+
+            if not page_ids:
+                consecutive_no_new += 1
+                if consecutive_no_new >= 2:
+                    logger.info("Empty page x2 — stopping at p%d", page_num)
                     break
                 continue
-            consecutive_empty = 0
 
-            # check if the cards are the same as the previous page (some sites repeat the last page instead of giving a 404)
-            content_hash = await self._content_hash(page)
-            if content_hash == getattr(self, "_prev_hash", None):
-                logger.info("Content hash same as previous page — stopping at p%d", page_num)
-                break
-            self._prev_hash = content_hash
+            new_ids = page_ids - seen_ids
+            if not new_ids:
+                consecutive_no_new += 1
+                logger.info(
+                    "Page %d returned %d cards but all already seen — " "last real page was p%d (stopping)",
+                    page_num,
+                    len(page_ids),
+                    page_num - consecutive_no_new,
+                )
+                if consecutive_no_new >= 1:
+                    break
+                continue
 
+            consecutive_no_new = 0
+            seen_ids |= new_ids
+            logger.debug("Page %d: %d new cards (%d total)", page_num, len(new_ids), len(seen_ids))
             yield page
+
+    async def _collect_card_ids(self, page: Page) -> set[str]:
+        """
+        Build a set of stable identifiers for the cards on the current page.
+        Uses href links when available, falls back to visible text.
+        """
+        if not self.container_selector:
+            return set()
+        try:
+            ids: set[str] = set()
+            cards = page.locator(self.container_selector)
+            count = await cards.count()
+            for i in range(min(count, 50)):  # cap to avoid slow pages
+                card = cards.nth(i)
+                # Prefer href (stable), fall back to text (less stable but works)
+                try:
+                    a = card.locator("a[href]").first
+                    href = await a.get_attribute("href", timeout=500)
+                    if href:
+                        ids.add(href.strip())
+                        continue
+                except Exception:
+                    pass
+                try:
+                    text = (await card.inner_text(timeout=500)).strip()[:120]
+                    if text:
+                        ids.add(text)
+                except Exception:
+                    pass
+            return ids
+        except Exception:
+            return set()
 
     @staticmethod
     def _build_url(parsed, param: str, page_num: int) -> str:

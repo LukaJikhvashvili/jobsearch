@@ -10,6 +10,9 @@ pydantic
 google-genai             # Gemini (primary)
 anthropic                # Claude Haiku (fallback)
 
+# Translation
+deep-translator
+
 # Utilities
 python-dotenv
 rapidfuzz

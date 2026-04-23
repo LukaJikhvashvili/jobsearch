@@ -3,17 +3,17 @@
   "base_url": "https://jobs.ge",
   "listings_url": "https://jobs.ge/",
   "listings": {
-    "container": "tr:has(a[href*='view=jobs&id='])",
+    "container": "tr:has(a.vip)",
     "fields": {
       "title": {
-        "selector": "td:nth-child(2) a.vip",
+        "selector": "a.vip",
         "attr": "text",
         "confidence": 1.0
       },
       "company": {
         "selector": "td:nth-child(4) a",
         "attr": "text",
-        "confidence": 1.0
+        "confidence": 0.95
       }
     },
     "pagination": {
@@ -26,11 +26,11 @@
     },
     "navigation": {
       "type": "direct_link",
-      "link_selector": "td:nth-child(2) a.vip",
+      "link_selector": "a.vip",
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The job title link points directly to the detail page via the id parameter."
+      "notes": "The job title link points directly to the job details page."
     },
     "filters": {
       "available": [
@@ -51,36 +51,24 @@
           "mechanism": "dropdown",
           "param_name": "cid",
           "selector": "select[name='cid']",
-          "options_selector": null,
+          "options_selector": "option",
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": "Filter for job categories."
+          "notes": null
         },
         {
           "dimension": "location",
           "mechanism": "dropdown",
           "param_name": "lid",
           "selector": "select[name='lid']",
-          "options_selector": null,
+          "options_selector": "option",
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": "Filter for cities and regions."
-        },
-        {
-          "dimension": "category",
-          "mechanism": "dropdown",
-          "param_name": "jid",
-          "selector": "select[name='jid']",
-          "options_selector": null,
-          "item_selector": null,
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "confidence": 0.9,
-          "notes": "Filter for announcement types (Vacancies, Tenders, etc)."
+          "notes": null
         },
         {
           "dimension": "salary",
@@ -92,57 +80,22 @@
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": null
+          "notes": "Filter for 'Only with salary'"
         }
       ],
       "submit_selector": ".searchBtn a",
-      "notes": "The search form uses a GET method; filters can be applied via URL parameters or by clicking the search icon which triggers a JS submit."
+      "notes": "Filters are submitted via a GET form."
     }
   },
-  "detail": {
-    "fields": {
-      "location": {
-        "selector": "#job > span > i",
-        "attr": "text",
-        "confidence": 0.95
-      },
-      "salary": {
-        "selector": null,
-        "attr": "text",
-        "confidence": 1.0
-      },
-      "posted_date": {
-        "selector": ".dtable tr:nth-child(3) b:nth-of-type(1)",
-        "attr": "text",
-        "confidence": 0.9
-      },
-      "description": {
-        "selector": ".dtable tr:nth-child(4) td",
-        "attr": "html",
-        "confidence": 0.95
-      },
-      "requirements": {
-        "selector": null,
-        "attr": "html",
-        "confidence": 1.0
-      }
-    },
-    "application": {
-      "method": "external_link",
-      "form_selector": null,
-      "apply_button_selector": ".dtable tr:nth-child(4) td a",
-      "external_url_selector": ".dtable tr:nth-child(4) td a",
-      "email_selector": null,
-      "ats_domain": null,
-      "confidence": 1.0,
-      "notes": "The job description on this page is a summary that redirects to the company's own career portal for full details and application."
-    }
-  },
+  "detail": null,
+  "page_languages": [
+    "ka",
+    "en"
+  ],
   "requires_js": false,
-  "requires_auth": false,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-22T12:49:34.889754",
+  "generated_at": "2026-04-23T21:23:23.378408",
   "version": 1,
   "is_stale": false,
-  "notes": "The site uses a standard table-based layout for job details. Location and dates are clearly marked in the dtable class."
+  "notes": "The site uses a standard table-based layout for listings. Pagination is handled via a 'page' URL parameter as evidenced by the hidden input in the search form."
 }
