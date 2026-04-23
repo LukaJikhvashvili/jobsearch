@@ -114,6 +114,14 @@ class UrlParamPagination(PaginationStrategy):
                     break
                 continue
             consecutive_empty = 0
+
+            # check if the cards are the same as the previous page (some sites repeat the last page instead of giving a 404)
+            content_hash = await self._content_hash(page)
+            if content_hash == getattr(self, "_prev_hash", None):
+                logger.info("Content hash same as previous page — stopping at p%d", page_num)
+                break
+            self._prev_hash = content_hash
+
             yield page
 
     @staticmethod

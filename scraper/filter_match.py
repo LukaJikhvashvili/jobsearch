@@ -19,7 +19,7 @@ Usage:
 from typing import Optional
 
 # Minimum similarity score (0–100) to accept a match
-THRESHOLD = 72
+THRESHOLD = 60
 
 # ---------------------------------------------------------------------------
 # Translation tables — Georgian ↔ English
