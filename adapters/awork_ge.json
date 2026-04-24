@@ -6,12 +6,12 @@
     "container": "vacancy-card",
     "fields": {
       "title": {
-        "selector": ".vacancy-name",
+        "selector": "h6.vacancy-name",
         "attr": "text",
         "confidence": 1.0
       },
       "company": {
-        "selector": ".company-info p.font-bold",
+        "selector": ".company-info p.text-muted2",
         "attr": "text",
         "confidence": 1.0
       }
@@ -30,7 +30,7 @@
       "data_attribute": null,
       "click_container": true,
       "confidence": 0.9,
-      "notes": "No <a> tag with a direct link to the vacancy is present in the card; navigation is likely handled by the Angular component's click event."
+      "notes": "No anchor tags are present in the card HTML; navigation is triggered by Angular click handlers on the vacancy-card component."
     },
     "filters": {
       "available": [
@@ -47,6 +47,18 @@
           "notes": null
         },
         {
+          "dimension": "salary",
+          "mechanism": "checkbox_group",
+          "param_name": null,
+          "selector": "salary-range-selector",
+          "options_selector": ".dropdown-menu",
+          "item_selector": ".form-check-input",
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 0.9,
+          "notes": "Contains a 'only with salary' checkbox and a range slider."
+        },
+        {
           "dimension": "category",
           "mechanism": "checkbox_group",
           "param_name": null,
@@ -56,7 +68,7 @@
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": "Custom multi-selector component"
+          "notes": null
         },
         {
           "dimension": "location",
@@ -71,24 +83,12 @@
           "notes": null
         },
         {
-          "dimension": "salary",
-          "mechanism": "dropdown",
-          "param_name": null,
-          "selector": "salary-range-selector",
-          "options_selector": ".dropdown-menu",
-          "item_selector": null,
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "confidence": 0.9,
-          "notes": "Uses a range slider and a checkbox for 'paid only'"
-        },
-        {
           "dimension": "date_posted",
           "mechanism": "radio_group",
           "param_name": null,
           "selector": "date-group-selector",
           "options_selector": ".dropdown-menu-container",
-          "item_selector": "input[type='radio']",
+          "item_selector": ".form-check-input",
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
@@ -96,7 +96,7 @@
         }
       ],
       "submit_selector": null,
-      "notes": "Filters update the list dynamically via JS."
+      "notes": "Filters are reactive and apply immediately upon selection."
     }
   },
   "detail": null,
@@ -106,8 +106,8 @@
   ],
   "requires_js": true,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-23T21:24:26.525954",
+  "generated_at": "2026-04-24T12:33:26.871768",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a modern Angular application. Job cards are custom components without direct anchor tags, suggesting JS-based navigation."
+  "notes": "The site is a modern Angular application. Navigation is handled via JavaScript click events on the card components. Pagination is implemented as infinite scroll within a custom-scroll container."
 }

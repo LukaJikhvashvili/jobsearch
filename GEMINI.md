@@ -1,44 +1,58 @@
-# Job Scraper Engine
+# Project: Job Search Aggregator & Scraper
 
-This project is a sophisticated web scraping engine designed to crawl, filter, and extract job listing data from various career portals. It uses a metadata-driven approach where "adapters" (JSON configurations) define how to navigate, filter, and parse specific websites.
+A robust, AI-powered job search scraper designed to handle diverse job boards through a decoupled "Adapter" architecture. It uses LLMs (Gemini/Claude) to automatically profile sites and generate scraping schemas.
 
-## Core Architecture
+## Project Overview
 
-- **`scraper/runner.py`**: The main execution engine. It uses Playwright to handle browser interactions (filtering, pagination, clicking) and BeautifulSoup for HTML parsing.
-- **`scraper/models.py`**: Contains the Pydantic data models that define the structure of adapters, configuration, and scraped data.
-- **`adapters/`**: Directory containing JSON configuration files (e.g., `jobs_ge.json`) which define the specific DOM selectors, navigation strategies, and filtering mechanisms for target websites.
+The project is divided into two main phases:
+1.  **Profiling (Phase 1):** Uses `SiteProfiler` and `SchemaGenerator` (powered by Gemini) to analyze a job site's listings page. It identifies CSS selectors for job titles, companies, links, pagination, and filters, saving them as a `SiteAdapter` (JSON).
+2.  **Scraping (Phase 2):** Uses `ScraperRunner` to execute the scraping logic based on a loaded `SiteAdapter`. It handles complex interactions like Playwright-based filtering, pagination (URL params, next button, infinite scroll), and detail URL resolution.
 
-## Technologies
-
-- **Language**: Python
-- **Automation**: Playwright (for dynamic, JS-heavy sites)
-- **Parsing**: BeautifulSoup4 (with `lxml`)
-- **Data Validation**: Pydantic
-- **AI Integration**: Google Gemini and Anthropic (Claude) for intelligent adapter generation and data parsing.
+### Core Technologies
+- **Python 3.x**
+- **Playwright:** Browser automation for JS-heavy sites and bot-detection bypass.
+- **BeautifulSoup4 & LXML:** Fast HTML parsing and field extraction.
+- **Pydantic:** Strict data modeling for adapters and job listings.
+- **Google Gemini (google-genai):** Primary LLM for generating site-specific scraping schemas.
+- **Anthropic (Claude):** Fallback LLM for schema generation.
+- **Deep Translator:** Automatic translation of search filters for multi-language support (e.g., Georgian).
 
 ## Building and Running
 
-Ensure you have a virtual environment set up and the necessary dependencies installed:
+### Prerequisites
+- Python 3.10+
+- A `.env` file with `GEMINI_API_KEY` (and optionally `ANTHROPIC_API_KEY`).
 
+### Installation
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+
+# Install Playwright browsers
+playwright install chromium
 ```
 
-### Running Scrapes
+### Key Commands
+- **Run Example Workflow:** `python example_usage.py`
+  - This script demonstrates profiling a site, saving the adapter, and then running a filtered scrape.
+- **Manage Adapters:** Adapters are stored in the `adapters/` directory as JSON files. They are considered stale after 30 days.
 
-The engine is modular. The primary entry point for execution is the `ScraperRunner` class.
+## Project Structure
 
-Example usage is provided in `example_usage.py`:
-```bash
-python example_usage.py
-```
+- `scraper/`: Core logic
+    - `models.py`: Pydantic schemas for `SiteAdapter`, `JobListing`, and `UserFilters`.
+    - `runner.py`: The Playwright execution engine for scraping.
+    - `profiler.py`: Logic for analyzing sites and generating adapters via AI.
+    - `schema_generator.py`: LLM provider integrations (Gemini/Claude).
+    - `adapter_store.py`: CRUD operations for JSON adapters.
+    - `pagination.py`: Strategy-based pagination handlers.
+    - `filter_match.py`: Fuzzy matching and translation for DOM-based filters.
+- `adapters/`: Directory containing generated site configurations.
+- `example_usage.py`: Entry point for common workflows.
 
 ## Development Conventions
 
-- **Adapters**: New websites should be added as JSON files in the `adapters/` directory following the schema defined in `scraper/models.py`.
-- **Filtering**: The engine supports both URL-based parameter filtering and DOM-based interaction (e.g., clicking dropdowns, filling search fields).
-- **Enrichment**: Scrapers operate in two passes:
-  1.  **Listings pass**: Scrapes the listing page for basic info (title, company, URL).
-  2.  **Detail pass**: Visits individual job URLs to enrich data (description, requirements, salary, location, application method).
-- **Safety**: The `ScraperRunner` includes built-in safeguards like user-agent configuration, disabling unnecessary resource loading (images/fonts), and `no-sandbox` flags for container environments.
+- **Async/Await:** All I/O and browser interactions are asynchronous.
+- **Schema-Driven:** Don't hardcode site-specific selectors in `runner.py`. Instead, update or refine the `SiteAdapter` schema in `models.py` and the generation logic in `profiler.py`.
+- **Bot Detection:** `ScraperRunner` uses stealth-like settings (custom User-Agent, locale mapping, disabling automation flags) to avoid being blocked.
+- **Type Safety:** Use Pydantic's `BaseModel` for all data structures to ensure consistency between the AI-generated adapters and the runner.

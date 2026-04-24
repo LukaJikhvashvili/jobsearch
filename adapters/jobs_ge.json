@@ -6,14 +6,14 @@
     "container": "tr:has(a.vip)",
     "fields": {
       "title": {
-        "selector": "a.vip",
+        "selector": "td:nth-child(2) a.vip",
         "attr": "text",
         "confidence": 1.0
       },
       "company": {
         "selector": "td:nth-child(4) a",
         "attr": "text",
-        "confidence": 0.95
+        "confidence": 1.0
       }
     },
     "pagination": {
@@ -26,11 +26,11 @@
     },
     "navigation": {
       "type": "direct_link",
-      "link_selector": "a.vip",
+      "link_selector": "td:nth-child(2) a.vip",
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The job title link points directly to the job details page."
+      "notes": "The job title link points directly to the vacancy details page."
     },
     "filters": {
       "available": [
@@ -71,20 +71,32 @@
           "notes": null
         },
         {
-          "dimension": "salary",
-          "mechanism": "checkbox_group",
-          "param_name": "has_salary",
-          "selector": ".checkitems",
-          "options_selector": null,
-          "item_selector": "input[name='has_salary']",
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": "jid",
+          "selector": "select[name='jid']",
+          "options_selector": "option",
+          "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": "Filter for 'Only with salary'"
+          "notes": "Filters by listing type (Jobs, Tenders, Trainings, etc.)"
+        },
+        {
+          "dimension": "salary",
+          "mechanism": "checkbox_group",
+          "param_name": "has_salary",
+          "selector": "input[name='has_salary']",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": null
         }
       ],
-      "submit_selector": ".searchBtn a",
-      "notes": "Filters are submitted via a GET form."
+      "submit_selector": "div.searchBtn a",
+      "notes": "Checkboxes trigger form submission via inline JS onclick."
     }
   },
   "detail": null,
@@ -94,8 +106,8 @@
   ],
   "requires_js": false,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-23T21:23:23.378408",
+  "generated_at": "2026-04-24T11:33:14.935312",
   "version": 1,
   "is_stale": false,
-  "notes": "The site uses a standard table-based layout for listings. Pagination is handled via a 'page' URL parameter as evidenced by the hidden input in the search form."
+  "notes": "The site uses a table-based layout for job listings. Both VIP and regular entries share a similar structure within their respective tables."
 }

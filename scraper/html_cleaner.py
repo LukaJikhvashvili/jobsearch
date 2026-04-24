@@ -90,12 +90,12 @@ def clean_html(html: str, max_chars: int = 40_000, keep_data_attrs: bool = True)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     cleaned = re.sub(r">\s+<", "><", cleaned)
 
-    if len(cleaned) > max_chars:
-        truncated = cleaned[:max_chars]
-        boundary = truncated.rfind("</")
-        if boundary > max_chars * 0.75:
-            truncated = truncated[:boundary]
-        cleaned = truncated
+    # if len(cleaned) > max_chars:
+    #     truncated = cleaned[:max_chars]
+    #     boundary = truncated.rfind("</")
+    #     if boundary > max_chars * 0.75:
+    #         truncated = truncated[:boundary]
+    #     cleaned = truncated
 
     return cleaned.strip()
 

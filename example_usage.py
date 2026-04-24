@@ -116,7 +116,7 @@ async def main():
         if store.needs_refresh(site_name):
             await generate_adapter(site_name, listings_url)
 
-    filters = UserFilters(location="თბილისი", keyword="ანალიტიკოსი")
+    filters = UserFilters(location="Tbilisi", keyword="analyst", date_posted="last week")
 
     all_jobs: list[JobListing] = []
     for site_name in SITES:

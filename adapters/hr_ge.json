@@ -6,7 +6,7 @@
     "container": "app-announcement-item",
     "fields": {
       "title": {
-        "selector": "a.title .title__text",
+        "selector": ".title__text",
         "attr": "text",
         "confidence": 1.0
       },
@@ -20,9 +20,9 @@
       "type": "url_param",
       "param_name": "pg",
       "start_page": 1,
-      "next_selector": "hrra-routable-paging a.item:last-child",
-      "max_pages": 31,
-      "delay_ms": 1200
+      "next_selector": ".paging-container + a.item",
+      "max_pages": 32,
+      "delay_ms": 1500
     },
     "navigation": {
       "type": "direct_link",
@@ -30,7 +30,7 @@
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The job title is a direct anchor link to the announcement page."
+      "notes": "The job title is a direct anchor link to the announcement detail page."
     },
     "filters": {
       "available": [
@@ -56,7 +56,7 @@
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 0.9,
-          "notes": "Uses a custom tree-select component."
+          "notes": "Uses a tree-select component for locations."
         },
         {
           "dimension": "category",
@@ -68,7 +68,7 @@
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 0.9,
-          "notes": "Specialization filter."
+          "notes": "Specialization/Category filter."
         },
         {
           "dimension": "salary",
@@ -96,7 +96,7 @@
         }
       ],
       "submit_selector": "button.search-btn",
-      "notes": "Filters are applied via a search button."
+      "notes": "Filters are applied via a 'Search' button."
     }
   },
   "detail": null,
@@ -106,8 +106,8 @@
   ],
   "requires_js": true,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-23T21:23:53.040450",
+  "generated_at": "2026-04-24T11:33:45.964640",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a modern Angular application using PrimeNG components (p-select, p-treeselect). Pagination uses the 'pg' URL parameter."
+  "notes": "The site is a modern Angular application using PrimeNG components. Listings are contained within custom app-announcement-item elements."
 }
