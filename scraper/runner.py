@@ -310,19 +310,27 @@ class ScraperRunner:
                 return False
             sel = page.locator(entry.selector).first
             await sel.wait_for(state="visible", timeout=5_000)
-            # Try exact label match first
-            try:
-                await sel.select_option(label=value)
-                return True
-            except Exception:
-                pass
-            # Fuzzy match across all options
+
+            # Check if it's a standard <select> element
+            is_select = await page.evaluate(
+                "([sel]) => document.querySelector(sel)?.tagName === 'SELECT'", [entry.selector]
+            )
+
+            if is_select:
+                # Try exact label match first
+                try:
+                    await sel.select_option(label=value)
+                    return True
+                except Exception:
+                    pass
+
+            # Fuzzy match across all options (or custom elements that might have 'options' property)
             options_info = await page.evaluate(
                 """([sel]) => {
                     const el = document.querySelector(sel);
-                    if (!el) return [];
+                    if (!el || !el.options) return [];
                     return Array.from(el.options).map((o, i) => (
-                        {i, text: o.text, value: o.value}
+                        {i, text: o.text || o.innerText || '', value: o.value}
                     ));
                 }""",
                 [entry.selector],
