@@ -1,19 +1,19 @@
 {
   "site": "jobs.ge",
-  "base_url": "https://jobs.ge",
+  "base_url": "https://jobs.ge/",
   "listings_url": "https://jobs.ge/",
   "listings": {
-    "container": "tr:has(a[href*='view=jobs&id='])",
+    "container": "tr:has(td:nth-child(2) a[href*='view=jobs'])",
     "fields": {
       "title": {
-        "selector": "td:nth-child(2) a:first-child",
+        "selector": "td:nth-child(2) a.vip",
         "attr": "text",
         "confidence": 1.0
       },
       "company": {
         "selector": "td:nth-child(4)",
         "attr": "text",
-        "confidence": 1.0
+        "confidence": 0.9
       }
     },
     "pagination": {
@@ -26,11 +26,11 @@
     },
     "navigation": {
       "type": "direct_link",
-      "link_selector": "td:nth-child(2) a:first-child",
+      "link_selector": "td:nth-child(2) a.vip",
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The job title link points directly to the job detail page."
+      "notes": "The job title link points directly to the job details page."
     },
     "filters": {
       "available": [
@@ -72,7 +72,7 @@
         },
         {
           "dimension": "salary",
-          "mechanism": "url_param",
+          "mechanism": "checkbox_group",
           "param_name": "has_salary",
           "selector": "input[name='has_salary']",
           "options_selector": null,
@@ -83,8 +83,8 @@
           "notes": "Checkbox for 'Only with salary'"
         }
       ],
-      "submit_selector": ".searchBtn a",
-      "notes": "The search form uses GET parameters."
+      "submit_selector": "div.searchBtn a",
+      "notes": "The search button triggers a JavaScript form submit."
     }
   },
   "detail": null,
@@ -94,8 +94,8 @@
   ],
   "requires_js": false,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-25T20:06:01.793477",
+  "generated_at": "2026-04-25T20:30:41.973388",
   "version": 1,
   "is_stale": false,
-  "notes": "The site uses a traditional table-based layout. Job listings are contained within table rows across two main sections: VIP and Regular entries. Pagination is handled via a 'page' URL parameter as evidenced by the hidden form input."
+  "notes": "The site uses a table-based layout for listings, split into VIP and Regular sections. Pagination is handled via a 'page' query parameter as evidenced by the hidden input in the search form."
 }

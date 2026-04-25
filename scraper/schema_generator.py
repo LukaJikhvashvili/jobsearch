@@ -24,6 +24,8 @@ from .models import SiteAdapter
 
 logger = logging.getLogger(__name__)
 
+MAX_OUTPUT_TOKENS = 8192  # Adjust as needed based on expected schema size and LLM limits
+
 # ---------------------------------------------------------------------------
 _SHARED_RULES = """STRICT RULES:
 1. Return ONLY a single valid JSON object. No markdown fences, no prose.
@@ -183,7 +185,7 @@ class GeminiProvider(AIProvider):
             config=self._types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
-                max_output_tokens=4096,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
         )
         return response.text
@@ -203,7 +205,7 @@ class ClaudeProvider(AIProvider):
     def generate(self, system: str, user: str) -> str:
         response = self._client.messages.create(
             model=self._model,
-            max_tokens=4096,
+            max_tokens=MAX_OUTPUT_TOKENS,
             system=system,
             messages=[{"role": "user", "content": user}],
         )
@@ -226,16 +228,93 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
-def _parse(raw: str) -> dict:
-    text = _strip_fences(raw)
+def _extract_json_object(text: str) -> str:
+    """Return the substring spanning the outermost { … } pair."""
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return text
+    return text[start : end + 1]
+
+
+def _repair_and_parse(raw: str) -> dict:
+    """
+    Multi-strategy JSON parsing with progressive fallback.
+
+    1. Direct parse after fence-stripping (happy path).
+    2. Extract outermost { … } and retry.
+    3. json-repair library (optional — `pip install json-repair`).
+    4. Brace-counting truncation: walk the string keeping a stack;
+       truncate at the last position where all open structures were closed,
+       then close any remaining open ones.
+
+    Raises json.JSONDecodeError only when all strategies are exhausted.
+    """
+    cleaned = _strip_fences(raw)
+
+    # 1 — happy path
     try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        logger.error("Failed to parse JSON from LLM response. Raw response follows:")
-        logger.error("-" * 40)
-        logger.error(raw)
-        logger.error("-" * 40)
-        raise exc
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # 2 — trim noise outside the JSON object
+    extracted = _extract_json_object(cleaned)
+    try:
+        return json.loads(extracted)
+    except json.JSONDecodeError:
+        pass
+
+    # 3 — json-repair (optional dependency)
+    try:
+        import json_repair  # type: ignore
+
+        repaired = json_repair.repair_json(extracted)
+        if repaired:
+            result = json.loads(repaired) if isinstance(repaired, str) else repaired
+            if isinstance(result, dict):
+                return result
+    except Exception:
+        pass
+
+    # 4 — brace-counting: find the last position where depth returned to 0
+    stack: list[str] = []
+    close_map = {"{": "}", "[": "]"}
+    last_complete = 0
+    in_string = False
+    escape_next = False
+
+    for i, ch in enumerate(extracted):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in ("{", "["):
+            stack.append(close_map[ch])
+        elif ch in ("}", "]"):
+            if stack and stack[-1] == ch:
+                stack.pop()
+                if not stack:
+                    last_complete = i + 1
+
+    if last_complete:
+        try:
+            return json.loads(extracted[:last_complete])
+        except json.JSONDecodeError:
+            pass
+
+    raise json.JSONDecodeError(
+        f"All repair strategies failed ({len(raw)} chars). First 300: " + raw[:300],
+        raw,
+        0,
+    )
 
 
 def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
@@ -272,7 +351,7 @@ class SchemaGenerator:
         user = _phase1_user(site, listings_url, listings_html)
 
         raw = self._call(system, user, site)
-        data = _parse(raw)
+        data = _repair_and_parse(raw)
         adapter = _build_adapter(data, site, listings_url)
 
         langs = adapter.page_languages

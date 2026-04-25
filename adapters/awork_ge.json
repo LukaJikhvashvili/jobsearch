@@ -22,7 +22,7 @@
       "start_page": 1,
       "next_selector": null,
       "max_pages": 50,
-      "delay_ms": 1500
+      "delay_ms": 1200
     },
     "navigation": {
       "type": "card_click",
@@ -30,7 +30,7 @@
       "data_attribute": null,
       "click_container": true,
       "confidence": 0.9,
-      "notes": "No <a> tags with hrefs are visible inside the vacancy-card component; navigation is likely triggered by an Angular (click) handler on the card div."
+      "notes": "No <a> tags pointing to job details are present inside the vacancy-card component; navigation is handled via Angular click events on the card container."
     },
     "filters": {
       "available": [
@@ -47,56 +47,56 @@
           "notes": null
         },
         {
-          "dimension": "salary",
-          "mechanism": "dropdown",
+          "dimension": "category",
+          "mechanism": "checkbox_group",
           "param_name": null,
-          "selector": "salary-range-selector .dropdown-toggle",
+          "selector": "multi-selector[placeholder*='spheres']",
           "options_selector": ".dropdown-menu",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 0.9,
-          "notes": "Custom salary range component with a checkbox and slider."
-        },
-        {
-          "dimension": "category",
-          "mechanism": "checkbox_group",
-          "param_name": null,
-          "selector": "multi-selector[placeholder*='spheres']",
-          "options_selector": ".dropdown-menu-container",
-          "item_selector": ".form-check",
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "confidence": 1.0,
-          "notes": null
+          "notes": "Selector based on the Angular component and its placeholder attribute."
         },
         {
           "dimension": "location",
           "mechanism": "checkbox_group",
           "param_name": null,
           "selector": "multi-selector[placeholder*='cities']",
-          "options_selector": ".dropdown-menu-container",
+          "options_selector": ".dropdown-menu",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
+          "confidence": 0.9,
           "notes": null
+        },
+        {
+          "dimension": "salary",
+          "mechanism": "dropdown",
+          "param_name": null,
+          "selector": "salary-range-selector",
+          "options_selector": ".dropdown-menu",
+          "item_selector": ".form-check",
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 0.9,
+          "notes": "Contains a checkbox for 'salaried only' and a range slider."
         },
         {
           "dimension": "date_posted",
           "mechanism": "radio_group",
           "param_name": null,
           "selector": "date-group-selector",
-          "options_selector": ".dropdown-menu-container",
+          "options_selector": ".dropdown-menu",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
+          "confidence": 0.9,
           "notes": null
         }
       ],
       "submit_selector": null,
-      "notes": "Filters are reactive and apply immediately upon selection."
+      "notes": "Filters in this Angular app typically apply immediately upon selection or when the dropdown is closed."
     }
   },
   "detail": null,
@@ -105,9 +105,9 @@
     "en"
   ],
   "requires_js": true,
-  "overall_confidence": 0.95,
-  "generated_at": "2026-04-25T20:12:09.958091",
+  "overall_confidence": 0.9,
+  "generated_at": "2026-04-25T20:42:47.351943",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a modern Angular SPA. Job cards are rendered as custom components. Navigation is handled via JS click events on the card container as no direct anchor tags are present in the card markup."
+  "notes": "The site is a modern Angular application. Job cards are custom components that likely use JavaScript for navigation as no direct anchor tags are present within the card structure. Pagination appears to be infinite scroll based on the scrollable container classes."
 }
