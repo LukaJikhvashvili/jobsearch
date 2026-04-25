@@ -72,8 +72,7 @@ Examine BOTH the job cards HTML AND the pagination area HTML carefully.
   infinite_scroll — no page controls at all; content loads on scroll
   none            — all jobs fit on one page, no pagination
 
-IMPORTANT: if you see a "next" button, arrow, or translated equivalent
-("შემდეგი", "siguiente", "suivant", "далее" etc.) → use next_button.
+IMPORTANT: if you see a "next" button, arrow, or translated equivalent → use next_button.
 If you see page numbers or a ?page= param → use url_param.
 If neither → use infinite_scroll or none.
 
@@ -142,18 +141,14 @@ OUTPUT SCHEMA — fill every key, null for absent:
 }}"""
 
 
-def _phase1_user(site: str, listings_url: str, listings_html: str, pagination_html: str = "") -> str:
-    pagination_section = (
-        f"\n=== PAGINATION AREA HTML (bottom of page, post-JS render) ===\n{pagination_html}\n" if pagination_html else ""
-    )
+def _phase1_user(site: str, listings_url: str, listings_html: str) -> str:
     return (
         f"Site: {site}\n"
         f"Listings URL: {listings_url}\n\n"
-        f"=== SAMPLE JOB CARDS HTML (post-JS render, 3 cards) ===\n{listings_html}\n"
-        f"{pagination_section}\n"
+        f"=== SAMPLE JOB LISTINGS PAGE HTML (post-JS render) ===\n{listings_html}\n"
         "NOTE: This HTML is the RENDERED DOM after JavaScript execution. "
         "onclick attrs, data-* attrs, and dynamic content are all present. "
-        "Use them to correctly classify navigation type.\n\n"
+        "Use them to correctly classify navigation and paginations types.\n\n"
         "Return the Phase 1 JSON now."
     )
 
@@ -232,7 +227,15 @@ def _strip_fences(text: str) -> str:
 
 
 def _parse(raw: str) -> dict:
-    return json.loads(_strip_fences(raw))
+    text = _strip_fences(raw)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        logger.error("Failed to parse JSON from LLM response. Raw response follows:")
+        logger.error("-" * 40)
+        logger.error(raw)
+        logger.error("-" * 40)
+        raise exc
 
 
 def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
@@ -260,13 +263,13 @@ class SchemaGenerator:
         self.primary = primary
         self.fallback = fallback
 
-    def generate(self, site: str, listings_url: str, listings_html: str, pagination_html: str = "") -> SiteAdapter:
+    def generate(self, site: str, listings_url: str, listings_html: str) -> SiteAdapter:
         """
         Single-phase generation. Returns a fully validated SiteAdapter.
         detail is None until Phase 2 is implemented.
         """
         system = _PHASE1_SYSTEM
-        user = _phase1_user(site, listings_url, listings_html, pagination_html)
+        user = _phase1_user(site, listings_url, listings_html)
 
         raw = self._call(system, user, site)
         data = _parse(raw)
