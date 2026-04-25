@@ -1,6 +1,6 @@
 {
   "site": "hr.ge",
-  "base_url": "https://www.hr.ge/",
+  "base_url": "https://www.hr.ge",
   "listings_url": "https://www.hr.ge/search-posting",
   "listings": {
     "container": "app-announcement-item",
@@ -20,7 +20,7 @@
       "type": "url_param",
       "param_name": "pg",
       "start_page": 1,
-      "next_selector": ".paging a.item:has(svg-icon.chevron--left)",
+      "next_selector": "a.item:has(svg-icon[src*='chevron-right'])",
       "max_pages": 30,
       "delay_ms": 1500
     },
@@ -30,7 +30,7 @@
       "data_attribute": null,
       "click_container": false,
       "confidence": 1.0,
-      "notes": "The job title is wrapped in an <a> tag with a direct URL to the listing."
+      "notes": "Each job card contains a standard anchor tag with a direct URL to the announcement."
     },
     "filters": {
       "available": [
@@ -50,7 +50,7 @@
           "dimension": "location",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": "hrra-location-tree-select",
+          "selector": "hrra-location-tree-select p-treeselect",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
@@ -62,7 +62,7 @@
           "dimension": "category",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": "hrra-specialization-tree-select",
+          "selector": "hrra-specialization-tree-select p-treeselect",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
@@ -74,12 +74,12 @@
           "dimension": "salary",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": "hrra-salary p-select",
+          "selector": ".salaryOptionDropdown",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 0.9,
+          "confidence": 1.0,
           "notes": null
         },
         {
@@ -96,7 +96,7 @@
         }
       ],
       "submit_selector": "button.search-btn",
-      "notes": "Filters use custom Angular components (p-select, p-treeselect) which function as dropdowns."
+      "notes": "Filters use custom Angular/PrimeNG components. Location and Specialization use tree-select structures."
     }
   },
   "detail": null,
@@ -106,8 +106,8 @@
   ],
   "requires_js": true,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-25T20:11:35.845877",
+  "generated_at": "2026-04-25T20:42:18.697264",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is an Angular application. Job listings are contained within app-announcement-item components. Pagination is handled via a 'pg' URL parameter."
+  "notes": "The site is a modern Angular application using PrimeNG components (p-select, p-treeselect). Listings are rendered dynamically."
 }

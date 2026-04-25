@@ -3,7 +3,7 @@
   "base_url": "https://myjobs.ge",
   "listings_url": "https://myjobs.ge/ka/vacancy",
   "listings": {
-    "container": "div.flex.flex-col > div.cursor-pointer",
+    "container": "div.relative.flex.gap-3.py-3.px-4.cursor-pointer",
     "fields": {
       "title": {
         "selector": "h5.font-tbcx-bold",
@@ -11,16 +11,16 @@
         "confidence": 1.0
       },
       "company": {
-        "selector": "p.font-tbcx-medium",
+        "selector": "p.text-secondary-100.font-tbcx-medium",
         "attr": "text",
         "confidence": 1.0
       }
     },
     "pagination": {
-      "type": "url_param",
+      "type": "next_button",
       "param_name": "page",
       "start_page": 1,
-      "next_selector": "ul.react-paginate li.next a",
+      "next_selector": "li.next a",
       "max_pages": 46,
       "delay_ms": 1200
     },
@@ -30,14 +30,14 @@
       "data_attribute": null,
       "click_container": true,
       "confidence": 0.9,
-      "notes": "The job card container has 'cursor-pointer' and 'hover:bg-primary-5' classes but no direct <a> tag wrapping the content, indicating a JS click handler."
+      "notes": "The container has 'cursor-pointer' and 'hover:bg-primary-5', and the title has 'hover:underline', which are typical patterns for JS-driven card navigation in this framework."
     },
     "filters": {
       "available": [
         {
           "dimension": "keyword",
           "mechanism": "search_field",
-          "param_name": "keyword",
+          "param_name": null,
           "selector": "input[type='search']",
           "options_selector": null,
           "item_selector": null,
@@ -49,30 +49,30 @@
         {
           "dimension": "location",
           "mechanism": "search_field",
-          "param_name": "location",
+          "param_name": null,
           "selector": "input[placeholder='მდებარეობა']",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 1.0,
-          "notes": "Combobox style input"
+          "notes": null
         },
         {
           "dimension": "category",
           "mechanism": "dropdown",
-          "param_name": "types",
+          "param_name": "categories",
           "selector": ".job-type-dropdown button",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "confidence": 0.9,
-          "notes": "Labeled as 'მუშაობის ტიპები'"
+          "notes": "Dropdown for job types/categories"
         }
       ],
       "submit_selector": null,
-      "notes": "Filters appear to trigger updates dynamically or via the search input."
+      "notes": "Filters appear to be dynamic/auto-submitting or triggered by the search inputs."
     }
   },
   "detail": null,
@@ -81,8 +81,8 @@
   ],
   "requires_js": true,
   "overall_confidence": 0.95,
-  "generated_at": "2026-04-25T20:15:17.216630",
+  "generated_at": "2026-04-25T20:43:15.268832",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a modern Next.js application using Headless UI components. Job cards are interactive divs without direct anchor tags for the whole card, suggesting JS-based navigation."
+  "notes": "The site is a React/Next.js application. Job cards use JS-based navigation as indicated by the cursor-pointer class on the container and lack of direct anchor tags for the full card in the provided snippet."
 }
