@@ -1,0 +1,88 @@
+{
+  "site": "myjobs.ge",
+  "base_url": "https://myjobs.ge",
+  "listings_url": "https://myjobs.ge/ka/vacancy",
+  "listings": {
+    "container": "div.flex.flex-col > div.cursor-pointer",
+    "fields": {
+      "title": {
+        "selector": "h5.font-tbcx-bold",
+        "attr": "text",
+        "confidence": 1.0
+      },
+      "company": {
+        "selector": "p.font-tbcx-medium",
+        "attr": "text",
+        "confidence": 1.0
+      }
+    },
+    "pagination": {
+      "type": "url_param",
+      "param_name": "page",
+      "start_page": 1,
+      "next_selector": "ul.react-paginate li.next a",
+      "max_pages": 46,
+      "delay_ms": 1200
+    },
+    "navigation": {
+      "type": "card_click",
+      "link_selector": null,
+      "data_attribute": null,
+      "click_container": true,
+      "confidence": 0.9,
+      "notes": "The job card container has 'cursor-pointer' and 'hover:bg-primary-5' classes but no direct <a> tag wrapping the content, indicating a JS click handler."
+    },
+    "filters": {
+      "available": [
+        {
+          "dimension": "keyword",
+          "mechanism": "search_field",
+          "param_name": "keyword",
+          "selector": "input[type='search']",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": null
+        },
+        {
+          "dimension": "location",
+          "mechanism": "search_field",
+          "param_name": "location",
+          "selector": "input[placeholder='მდებარეობა']",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 1.0,
+          "notes": "Combobox style input"
+        },
+        {
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": "types",
+          "selector": ".job-type-dropdown button",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "confidence": 0.9,
+          "notes": "Labeled as 'მუშაობის ტიპები'"
+        }
+      ],
+      "submit_selector": null,
+      "notes": "Filters appear to trigger updates dynamically or via the search input."
+    }
+  },
+  "detail": null,
+  "page_languages": [
+    "ka"
+  ],
+  "requires_js": true,
+  "overall_confidence": 0.95,
+  "generated_at": "2026-04-25T20:15:17.216630",
+  "version": 1,
+  "is_stale": false,
+  "notes": "The site is a modern Next.js application using Headless UI components. Job cards are interactive divs without direct anchor tags for the whole card, suggesting JS-based navigation."
+}

@@ -12,7 +12,7 @@ attributes are visible to the LLM.
 import logging
 from playwright.async_api import async_playwright, BrowserContext, Page
 
-from .html_cleaner import extract_pagination_area, clean_html
+from .html_cleaner import clean_html
 from .models import SiteAdapter
 from .schema_generator import SchemaGenerator
 
@@ -56,16 +56,11 @@ class SiteProfiler:
         await self._reveal_dynamic_content(page)
 
         raw_html = await page.content()
-        cards_html = clean_html(raw_html, max_chars=60_000)
-        pagination_html = extract_pagination_area(raw_html, max_chars=15_000)
+        listings_html = clean_html(raw_html)
         await page.close()
 
-        logger.info(
-            "[Profiler] Sending to LLM: cards=%d chars  pagination=%d chars",
-            len(cards_html),
-            len(pagination_html),
-        )
-        return self.generator.generate(site, listings_url, cards_html, pagination_html)
+        logger.info("[Profiler] Sending to LLM: cards=%d chars", len(listings_html))
+        return self.generator.generate(site, listings_url, listings_html)
 
     async def _wait_for_js(self, page: Page) -> None:
         try:

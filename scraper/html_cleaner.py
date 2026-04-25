@@ -60,7 +60,7 @@ _KEEP_ATTRS = {
 }
 
 
-def clean_html(html: str, max_chars: int = 40_000, keep_data_attrs: bool = True) -> str:
+def clean_html(html: str, keep_data_attrs: bool = True) -> str:
     """
     Strip noise but preserve JS navigation signals and data attributes.
     """
@@ -90,49 +90,4 @@ def clean_html(html: str, max_chars: int = 40_000, keep_data_attrs: bool = True)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     cleaned = re.sub(r">\s+<", "><", cleaned)
 
-    # if len(cleaned) > max_chars:
-    #     truncated = cleaned[:max_chars]
-    #     boundary = truncated.rfind("</")
-    #     if boundary > max_chars * 0.75:
-    #         truncated = truncated[:boundary]
-    #     cleaned = truncated
-
     return cleaned.strip()
-
-
-def extract_pagination_area(html: str, max_chars: int = 8_000) -> str:
-    """
-    Extract the bottom portion of the page where pagination controls live.
-    Also checks for common pagination wrapper selectors.
-    """
-    soup = BeautifulSoup(html, "lxml")
-
-    # Try common pagination container selectors first
-    pagination_selectors = [
-        "[class*='pagination']",
-        "[class*='paging']",
-        "[class*='pages']",
-        "[id*='pagination']",
-        "[id*='paging']",
-        "nav[aria-label*='page']",
-        ".load-more",
-        "[class*='load-more']",
-        "[class*='infinite']",
-        "[data-infinite]",
-    ]
-    for sel in pagination_selectors:
-        try:
-            el = soup.select_one(sel)
-            if el:
-                return clean_html(str(el), max_chars)
-        except Exception:
-            continue
-
-    # Fallback: last 25% of body HTML
-    body = soup.find("body")
-    if body:
-        body_str = str(body)
-        bottom = body_str[int(len(body_str) * 0.75) :]
-        return clean_html(bottom, max_chars)
-
-    return ""

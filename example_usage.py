@@ -107,7 +107,7 @@ SITES = {
     "jobs.ge": "https://jobs.ge/",
     "hr.ge": "https://www.hr.ge/search-posting",
     "awork.ge": "https://awork.ge/user/vacancy/",
-    # "myjobs.ge": "https://myjobs.ge/ka/vacancy",
+    "myjobs.ge": "https://myjobs.ge/ka/vacancy",
 }
 
 
