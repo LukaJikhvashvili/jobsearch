@@ -42,10 +42,6 @@ from .filter_match import (
 
 logger = logging.getLogger(__name__)
 
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " "AppleWebKit/537.36 (KHTML, like Gecko) " "Chrome/124.0.0.0 Safari/537.36"
-)
-
 # ---------------------------------------------------------------------------
 # Field extraction
 # ---------------------------------------------------------------------------
@@ -340,9 +336,7 @@ class ScraperRunner:
             await sel.wait_for(state="visible", timeout=5_000)
 
             # Check if it's a standard <select> element
-            is_select = await page.evaluate(
-                "([sel]) => document.querySelector(sel)?.tagName === 'SELECT'", [entry.selector]
-            )
+            is_select = await page.evaluate("([sel]) => document.querySelector(sel)?.tagName === 'SELECT'", [entry.selector])
 
             if is_select:
                 # Try exact label match first

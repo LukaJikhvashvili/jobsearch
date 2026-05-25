@@ -1,4 +1,5 @@
 """Lightweight async event bus for extension hooks."""
+
 import logging
 from typing import Any, Callable, Coroutine, Dict, List, Union
 
@@ -25,6 +26,7 @@ class EventBus:
         for handler in self._handlers.get(event_type, []):
             try:
                 import asyncio
+
                 result = handler(event_type, data)
                 if asyncio.iscoroutine(result):
                     await result

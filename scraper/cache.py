@@ -1,4 +1,5 @@
 """Multi-level caching for HTML, LLM responses, and translations."""
+
 import hashlib
 import json
 import logging
@@ -15,16 +16,13 @@ logger = logging.getLogger(__name__)
 
 class CacheBackend(ABC):
     @abstractmethod
-    def get(self, key: str) -> Optional[str]:
-        ...
+    def get(self, key: str) -> Optional[str]: ...
 
     @abstractmethod
-    def set(self, key: str, value: str, ttl_s: int) -> None:
-        ...
+    def set(self, key: str, value: str, ttl_s: int) -> None: ...
 
     @abstractmethod
-    def invalidate(self, key: str) -> None:
-        ...
+    def invalidate(self, key: str) -> None: ...
 
 
 class FileCache(CacheBackend):
@@ -62,9 +60,15 @@ class FileCache(CacheBackend):
 
 class NullCache(CacheBackend):
     """No-op cache for when caching is disabled."""
-    def get(self, key: str) -> Optional[str]: return None
-    def set(self, key: str, value: str, ttl_s: int) -> None: pass
-    def invalidate(self, key: str) -> None: pass
+
+    def get(self, key: str) -> Optional[str]:
+        return None
+
+    def set(self, key: str, value: str, ttl_s: int) -> None:
+        pass
+
+    def invalidate(self, key: str) -> None:
+        pass
 
 
 class ScraperCache:

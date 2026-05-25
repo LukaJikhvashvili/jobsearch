@@ -1,4 +1,5 @@
 """Pipeline-based adapter generation with composable stages."""
+
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GenerationContext:
     """Mutable context passed through the pipeline."""
+
     site: str
     listings_url: str
     # Populated by stages as they run
@@ -34,8 +36,7 @@ class PipelineStage(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    async def process(self, context: GenerationContext) -> GenerationContext:
-        ...
+    async def process(self, context: GenerationContext) -> GenerationContext: ...
 
 
 class HTMLCaptureStage(PipelineStage):
@@ -180,16 +181,12 @@ class AdapterGenerationPipeline:
                 context.errors.append(f"{stage.name}: {exc}")
                 if self.event_bus:
                     await self.event_bus.publish(
-                        Events.ADAPTER_GENERATION_FAILED,
-                        site=site, stage=stage.name, error=str(exc)
+                        Events.ADAPTER_GENERATION_FAILED, site=site, stage=stage.name, error=str(exc)
                     )
                 raise
 
         duration = time.time() - start_time
         if self.event_bus:
-            await self.event_bus.publish(
-                Events.ADAPTER_GENERATION_COMPLETED,
-                site=site, duration=duration
-            )
+            await self.event_bus.publish(Events.ADAPTER_GENERATION_COMPLETED, site=site, duration=duration)
 
         return context.adapter

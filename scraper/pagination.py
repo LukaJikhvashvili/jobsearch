@@ -297,11 +297,9 @@ class InfiniteScrollPagination(PaginationStrategy):
             scroll_round += 1
 
             # Scroll one viewport at a time
-            await page.evaluate(
-                """
+            await page.evaluate("""
                 window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
-            """
-            )
+            """)
             await page.wait_for_timeout(self.config.delay_ms)
 
             # Click "Load more" button if present

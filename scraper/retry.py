@@ -1,4 +1,5 @@
 """Retry decorator with exponential backoff."""
+
 import asyncio
 import functools
 import logging
@@ -38,15 +39,16 @@ def retry(
                 except retryable as exc:
                     last_error = exc
                     if attempt == cfg.max_attempts:
-                        logger.error(
-                            "All %d attempts failed for %s: %s",
-                            cfg.max_attempts, func.__name__, exc
-                        )
+                        logger.error("All %d attempts failed for %s: %s", cfg.max_attempts, func.__name__, exc)
                         break
 
                     logger.warning(
                         "Attempt %d/%d failed for %s: %s — retrying in %.1fs",
-                        attempt, cfg.max_attempts, func.__name__, exc, delay
+                        attempt,
+                        cfg.max_attempts,
+                        func.__name__,
+                        exc,
+                        delay,
                     )
 
                     if event_bus:
@@ -63,7 +65,9 @@ def retry(
                     delay = min(delay * cfg.exponential_base, cfg.max_delay_s)
 
             raise last_error
+
         return wrapper
+
     return decorator
 
 
@@ -89,10 +93,16 @@ def retry_sync(
                         break
                     logger.warning(
                         "Attempt %d/%d failed for %s: %s — retrying in %.1fs",
-                        attempt, cfg.max_attempts, func.__name__, exc, delay
+                        attempt,
+                        cfg.max_attempts,
+                        func.__name__,
+                        exc,
+                        delay,
                     )
                     time.sleep(delay)
                     delay = min(delay * cfg.exponential_base, cfg.max_delay_s)
             raise last_error
+
         return wrapper
+
     return decorator

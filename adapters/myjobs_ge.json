@@ -3,7 +3,7 @@
   "base_url": "https://myjobs.ge",
   "listings_url": "https://myjobs.ge/ka/vacancy",
   "listings": {
-    "container": "div.relative.flex.gap-3.py-3.px-4.cursor-pointer",
+    "container": "div.flex.flex-col > div.cursor-pointer",
     "fields": {
       "title": {
         "selector": "h5.font-tbcx-bold",
@@ -15,58 +15,58 @@
       }
     },
     "pagination": {
-      "type": "next_button",
+      "type": "url_param",
       "param_name": "page",
       "start_page": 1,
-      "next_selector": "li.next a",
-      "max_pages": 46,
-      "delay_ms": 1200
+      "next_selector": "ul.react-paginate li.next a",
+      "max_pages": 51,
+      "delay_ms": 1500
     },
     "navigation": {
       "type": "card_click",
       "link_selector": null,
       "data_attribute": null,
       "click_container": true,
-      "notes": "The container has 'cursor-pointer' and 'hover:bg-primary-5', and the title has 'hover:underline', which are typical patterns for JS-driven card navigation in this framework."
+      "notes": "The job card container has 'cursor-pointer' and no direct <a> tags pointing to the vacancy details, indicating a JS click handler on the card."
     },
     "filters": {
       "available": [
         {
           "dimension": "keyword",
           "mechanism": "search_field",
-          "param_name": null,
-          "selector": "input[type='search']",
+          "param_name": "keyword",
+          "selector": ".keyword-dropdown input[type='search']",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Search input field with placeholder 'ძებნა'"
         },
         {
           "dimension": "location",
           "mechanism": "search_field",
-          "param_name": null,
-          "selector": "input[placeholder='\u10db\u10d3\u10d4\u10d1\u10d0\u10e0\u10d4\u10dd\u10d1\u10d0']",
+          "param_name": "location",
+          "selector": ".location-dropdown input",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Location input field with placeholder 'მდებარეობა'"
         },
         {
           "dimension": "category",
           "mechanism": "dropdown",
-          "param_name": "categories",
+          "param_name": "types",
           "selector": ".job-type-dropdown button",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Dropdown for job types/categories"
+          "notes": "Job types dropdown filter"
         }
       ],
       "submit_selector": null,
-      "notes": "Filters appear to be dynamic/auto-submitting or triggered by the search inputs."
+      "notes": null
     }
   },
   "detail": null,
@@ -74,8 +74,8 @@
     "ka"
   ],
   "requires_js": true,
-  "generated_at": "2026-04-25T20:43:15.268832",
+  "generated_at": "2026-05-25T16:29:16.040035",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a React/Next.js application. Job cards use JS-based navigation as indicated by the cursor-pointer class on the container and lack of direct anchor tags for the full card in the provided snippet."
+  "notes": "The page uses React and TBCX font styles. Job cards do not contain direct anchor links, indicating navigation is handled via JS click events on the card container."
 }

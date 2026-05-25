@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Optional, Dict, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
@@ -125,6 +125,21 @@ class PaginationConfig(BaseModel):
     next_selector: Optional[str] = None
     max_pages: int = 50
     delay_ms: int = 1200
+
+    @field_validator("start_page", mode="before")
+    @classmethod
+    def validate_start_page(cls, v):
+        return 1 if v is None else v
+
+    @field_validator("max_pages", mode="before")
+    @classmethod
+    def validate_max_pages(cls, v):
+        return 50 if v is None else v
+
+    @field_validator("delay_ms", mode="before")
+    @classmethod
+    def validate_delay_ms(cls, v):
+        return 1200 if v is None else v
 
 
 # ---------------------------------------------------------------------------

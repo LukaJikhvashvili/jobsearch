@@ -379,15 +379,14 @@ class SchemaGenerator:
             try:
                 if self.event_bus:
                     import asyncio
+
                     try:
                         loop = asyncio.get_running_loop()
                     except RuntimeError:
                         loop = None
                     # Fire-and-forget in sync context; skip if no loop
                     if loop and loop.is_running():
-                        loop.create_task(self.event_bus.publish(
-                            "llm_call_started", site=site, provider=provider.name
-                        ))
+                        loop.create_task(self.event_bus.publish("llm_call_started", site=site, provider=provider.name))
 
                 logger.info("Generating schema  site=%s  provider=%s", site, provider.name)
                 result = provider.generate(system, user)
@@ -398,9 +397,7 @@ class SchemaGenerator:
                     except RuntimeError:
                         loop = None
                     if loop and loop.is_running():
-                        loop.create_task(self.event_bus.publish(
-                            "llm_call_completed", site=site, provider=provider.name
-                        ))
+                        loop.create_task(self.event_bus.publish("llm_call_completed", site=site, provider=provider.name))
 
                 return result
             except Exception as exc:
@@ -409,13 +406,14 @@ class SchemaGenerator:
 
                 if self.event_bus:
                     import asyncio
+
                     try:
                         loop = asyncio.get_running_loop()
                     except RuntimeError:
                         loop = None
                     if loop and loop.is_running():
-                        loop.create_task(self.event_bus.publish(
-                            "llm_call_failed", site=site, provider=provider.name, error=str(exc)
-                        ))
+                        loop.create_task(
+                            self.event_bus.publish("llm_call_failed", site=site, provider=provider.name, error=str(exc))
+                        )
 
         raise RuntimeError(f"All providers failed for {site}") from last_error

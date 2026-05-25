@@ -13,16 +13,13 @@ Demonstrates both:
 import asyncio
 import logging
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
 from scraper import (
-    AdapterStore,
     ClaudeProvider,
     GeminiProvider,
     JobListing,
-    ScraperRunner,
     SchemaGenerator,
     SiteProfiler,
     ScraperConfig,

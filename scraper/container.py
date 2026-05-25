@@ -1,4 +1,5 @@
 """Dependency injection container — wires all components from config."""
+
 from typing import Optional
 from .config import ScraperConfig
 from .events import EventBus
