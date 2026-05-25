@@ -19,7 +19,6 @@ class AttrType(str, Enum):
 class FieldSelector(BaseModel):
     selector: Optional[str] = None
     attr: AttrType = AttrType.TEXT
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +38,6 @@ class DetailNavigation(BaseModel):
     link_selector: Optional[str] = None
     data_attribute: Optional[str] = None
     click_container: bool = False
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     notes: Optional[str] = None
 
 
@@ -75,7 +73,6 @@ class FilterEntry(BaseModel):
     item_selector: Optional[str] = None
     date_from_selector: Optional[str] = None
     date_to_selector: Optional[str] = None
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     notes: Optional[str] = None
 
 
@@ -157,7 +154,6 @@ class SiteAdapter(BaseModel):
     detail: Optional[Dict] = None
     page_languages: List[str] = Field(default=["en"])  # ISO 639-1 codes
     requires_js: bool = False
-    overall_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     generated_at: datetime = Field(default_factory=datetime.utcnow)
     version: int = 1
     is_stale: bool = False

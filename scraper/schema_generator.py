@@ -31,12 +31,7 @@ _SHARED_RULES = """STRICT RULES:
 1. Return ONLY a single valid JSON object. No markdown fences, no prose.
 2. If something is absent from the page, set its selector/value to null.
 3. Prefer class/id selectors. Avoid nth-child unless unavoidable.
-4. Selectors inside a card container must be RELATIVE to that container.
-
-CONFIDENCE SCORING:
-  >= 0.90  clear and unambiguous
-  0.70-0.89  likely correct, may need verification
-  < 0.70  uncertain — explain in notes"""
+4. Selectors inside a card container must be RELATIVE to that container."""
 
 # ---------------------------------------------------------------------------
 _PHASE1_SYSTEM = f"""You are an expert web scraping engineer analysing a job listings page.
@@ -97,13 +92,12 @@ OUTPUT SCHEMA — fill every key, null for absent:
   "listings_url":     "the URL provided",
   "requires_js":      false,
   "page_languages":   ["en"],
-  "overall_confidence": 1.0,
   "notes":            null,
   "listings": {{
     "container": "CSS for repeating job card",
     "fields": {{
-      "title":   {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}},
-      "company": {{"selector": "CSS or null", "attr": "text", "confidence": 1.0}}
+      "title":   {{"selector": "CSS or null", "attr": "text"}},
+      "company": {{"selector": "CSS or null", "attr": "text"}}
     }},
     "pagination": {{
       "type":          "url_param | next_button | infinite_scroll | none",
@@ -118,7 +112,6 @@ OUTPUT SCHEMA — fill every key, null for absent:
       "link_selector":   "CSS relative to container, or null",
       "data_attribute":  "attribute name or null",
       "click_container": false,
-      "confidence":      1.0,
       "notes":           "how you determined this or null"
     }},
     "filters": {{
@@ -132,7 +125,6 @@ OUTPUT SCHEMA — fill every key, null for absent:
           "item_selector":      null,
           "date_from_selector": null,
           "date_to_selector":   null,
-          "confidence":         1.0,
           "notes":              null
         }}
       ],
@@ -324,7 +316,6 @@ def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
     data.setdefault("listings_url", listings_url)
     data.setdefault("requires_js", False)
     data.setdefault("page_languages", ["en"])
-    data.setdefault("overall_confidence", 0.85)
     data.setdefault("detail", None)
     data.setdefault("generated_at", datetime.utcnow().isoformat())
     # Ensure filters key exists
@@ -357,13 +348,12 @@ class SchemaGenerator:
         langs = adapter.page_languages
         n_filters = len(adapter.listings.filters.available)
         logger.info(
-            "Schema generated  site=%s  nav=%s  pagination=%s  filters=%d  languages=%s  confidence=%.2f",
+            "Schema generated  site=%s  nav=%s  pagination=%s  filters=%d  languages=%s",
             site,
             adapter.listings.navigation.type,
             adapter.listings.pagination.type,
             n_filters,
             langs,
-            adapter.overall_confidence,
         )
         return adapter
 
