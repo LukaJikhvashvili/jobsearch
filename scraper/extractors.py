@@ -6,7 +6,7 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from .models import AttrType, FieldSelector, JobListing, SiteAdapter
+from .models import AttrType, FieldSelector, SiteAdapter
 
 
 class FieldExtractor(ABC):

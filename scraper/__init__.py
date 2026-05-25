@@ -6,7 +6,7 @@ from .profiler import SiteProfiler
 from .config import ScraperConfig, RetryConfig
 from .container import ScraperContainer
 from .events import EventBus, Events
-from .pipeline import AdapterGenerationPipeline, GenerationContext, PipelineStage
+from .pipeline import AdapterGenerationPipeline, FilterDiscoveryStage, GenerationContext, PipelineStage
 from .cache import ScraperCache
 from .retry import retry, retry_sync
 from .extractors import (
@@ -33,6 +33,7 @@ __all__ = [
     "EventBus",
     "Events",
     "AdapterGenerationPipeline",
+    "FilterDiscoveryStage",
     "GenerationContext",
     "PipelineStage",
     "ScraperCache",

@@ -78,7 +78,16 @@ If neither → use infinite_scroll or none.
 ─── FILTER MECHANISMS ──────────────────────────────────────────────────────
   url_param      → param_name: query key
   search_field   → selector: input element
-  dropdown       → selector: <select>
+  dropdown       → selector: the clickable trigger element that opens the dropdown.
+                   Use for ALL dropdown-like components including:
+                     - native <select> elements
+                     - custom dropdowns (React Select, Material UI, PrimeNG p-select)
+                     - tree-selects / nested hierarchical dropdowns (p-treeselect)
+                     - combobox / autocomplete inputs with suggestion panels
+                   Additional optional fields:
+                     is_nested: true if the dropdown has hierarchical/tree structure
+                     panel_search_selector: CSS for search/filter input inside the panel
+                     (set options_selector and item_selector to null if options load on click)
   checkbox_group → selector: container, item_selector: each checkbox
   tag_filter     → selector: container, item_selector: each pill/chip
   radio_group    → selector: container, item_selector: each radio
@@ -121,13 +130,16 @@ OUTPUT SCHEMA — fill every key, null for absent:
         {{
           "dimension":          "keyword | location | category | salary | date_posted",
           "mechanism":          "url_param | search_field | dropdown | checkbox_group | tag_filter | radio_group | date_range",
-          "param_name":         null,
-          "selector":           null,
-          "options_selector":   null,
-          "item_selector":      null,
-          "date_from_selector": null,
-          "date_to_selector":   null,
-          "notes":              null
+          "param_name":              null,
+          "selector":                null,
+          "options_selector":        null,
+          "item_selector":           null,
+          "date_from_selector":      null,
+          "date_to_selector":        null,
+          "panel_search_selector":   null,
+          "is_nested":               null,
+          "max_depth":               null,
+          "notes":                   null
         }}
       ],
       "submit_selector": null,
@@ -345,7 +357,13 @@ def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
 
 
 class SchemaGenerator:
-    def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None, event_bus=None, telemetry: Optional[TelemetryCollector] = None):
+    def __init__(
+        self,
+        primary: AIProvider,
+        fallback: Optional[AIProvider] = None,
+        event_bus=None,
+        telemetry: Optional[TelemetryCollector] = None,
+    ):
         self.primary = primary
         self.fallback = fallback
         self.event_bus = event_bus

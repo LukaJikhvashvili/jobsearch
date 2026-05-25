@@ -73,6 +73,9 @@ class FilterEntry(BaseModel):
     item_selector: Optional[str] = None
     date_from_selector: Optional[str] = None
     date_to_selector: Optional[str] = None
+    panel_search_selector: Optional[str] = None
+    is_nested: Optional[bool] = None
+    max_depth: Optional[int] = None
     notes: Optional[str] = None
 
 

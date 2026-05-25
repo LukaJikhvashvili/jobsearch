@@ -9,7 +9,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 
 from .config import CacheConfig
-from .events import EventBus, Events
+from .events import EventBus
 
 logger = logging.getLogger(__name__)
 
