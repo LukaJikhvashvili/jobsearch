@@ -3,7 +3,7 @@
   "base_url": "https://jobs.ge",
   "listings_url": "https://jobs.ge/",
   "listings": {
-    "container": "div.vipEntries table tr:has(a.vip), #job_list_table tr:has(a.vip)",
+    "container": ".vipEntries table tr:has(td), .regularEntries table tr:has(td)",
     "fields": {
       "title": {
         "selector": "a.vip",
@@ -27,7 +27,7 @@
       "link_selector": "a.vip",
       "data_attribute": null,
       "click_container": false,
-      "notes": "The job title link (a.vip) points directly to the job details page."
+      "notes": "The job title link points directly to the job details page."
     },
     "filters": {
       "available": [
@@ -40,33 +40,70 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Keyword search input field"
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
+          "notes": null
         },
         {
           "dimension": "category",
           "mechanism": "dropdown",
           "param_name": "cid",
           "selector": "select[name='cid']",
-          "options_selector": "option",
+          "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Category selection dropdown"
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
+          "notes": null
         },
         {
           "dimension": "location",
           "mechanism": "dropdown",
           "param_name": "lid",
           "selector": "select[name='lid']",
-          "options_selector": "option",
+          "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Location selection dropdown"
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
+          "notes": null
+        },
+        {
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": "jid",
+          "selector": "select[name='jid']",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
+          "notes": "Filters by vacancy type (vacancies, scholarships, tenders, trainings, etc.)"
+        },
+        {
+          "dimension": "category",
+          "mechanism": "checkbox_group",
+          "param_name": null,
+          "selector": ".checkitems",
+          "options_selector": null,
+          "item_selector": ".checkitem input",
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
+          "notes": "Checkboxes for 'only in title', 'only with salary', and 'only in Georgian'"
         }
       ],
-      "submit_selector": "div.searchBtn a",
-      "notes": "Filters are submitted via the search button or automatically on checkbox click."
+      "submit_selector": ".searchBtn a",
+      "notes": null
     }
   },
   "detail": null,
@@ -75,8 +112,8 @@
     "en"
   ],
   "requires_js": false,
-  "generated_at": "2026-05-25T17:03:48.457623",
+  "generated_at": "2026-05-25T17:55:30.977239",
   "version": 1,
   "is_stale": false,
-  "notes": "The site lists jobs in two main tables: VIP entries and Regular entries. Both share a similar row-based structure."
+  "notes": null
 }

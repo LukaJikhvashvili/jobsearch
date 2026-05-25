@@ -17,17 +17,15 @@ from typing import AsyncIterator, Optional
 from urllib.parse import urljoin, urlparse, urlencode, parse_qs, urlunparse
 
 from .config import PlaywrightConfig
-from .extractors import ExtractorPipeline, _extract_field
+from .extractors import ExtractorPipeline
 from .telemetry import TelemetryCollector
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
 from .models import (
-    AttrType,
     DetailNavType,
     DetailNavigation,
-    FieldSelector,
     FilterDimension,
     FilterEntry,
     FilterMechanism,
@@ -215,9 +213,7 @@ class ScraperRunner:
                 await self.event_bus.publish("scraping_page_completed", site=adapter.site, url=current_page.url)
 
         if self.telemetry:
-            self.telemetry.track_scraping_complete(
-                adapter.site, total_jobs, total_pages, time.time() - scrape_start
-            )
+            self.telemetry.track_scraping_complete(adapter.site, total_jobs, total_pages, time.time() - scrape_start)
 
         if self.event_bus:
             await self.event_bus.publish("scraping_completed", site=adapter.site)
@@ -609,7 +605,8 @@ class ScraperRunner:
 
     async def _click_harvested_item(self, page: Page, match: dict) -> bool:
         """Click an item by locating it in the stored panels via text content match."""
-        clicked = await page.evaluate("""([panelIdx, elIdx, text]) => {
+        clicked = await page.evaluate(
+            """([panelIdx, elIdx, text]) => {
             const panels = window.__ddPanels || [];
             if (panelIdx >= panels.length) return false;
             const panel = panels[panelIdx];
@@ -634,12 +631,12 @@ class ScraperRunner:
                 }
             }
             return false;
-        }""", [match["panelIdx"], match["elIdx"], match["text"]])
+        }""",
+            [match["panelIdx"], match["elIdx"], match["text"]],
+        )
         return bool(clicked)
 
-    async def _try_panel_search(
-        self, page: Page, entry: FilterEntry, value: str, page_languages: list
-    ) -> bool:
+    async def _try_panel_search(self, page: Page, entry: FilterEntry, value: str, page_languages: list) -> bool:
         """Try to use the search input inside the dropdown panel to filter options."""
         search_selector = entry.panel_search_selector
         if not search_selector:
@@ -691,8 +688,13 @@ class ScraperRunner:
         return False
 
     async def _expand_and_search_tree(
-        self, page: Page, value: str, page_languages: list,
-        current_items: list, depth: int, max_depth: int,
+        self,
+        page: Page,
+        value: str,
+        page_languages: list,
+        current_items: list,
+        depth: int,
+        max_depth: int,
     ) -> bool:
         """Recursively expand tree nodes and search for the target value."""
         if depth >= max_depth:
@@ -738,7 +740,8 @@ class ScraperRunner:
             await self._install_mutation_observer(page)
 
             # Click the expandable element
-            clicked = await page.evaluate("""([panelIdx, selector, text]) => {
+            clicked = await page.evaluate(
+                """([panelIdx, selector, text]) => {
                 const panels = window.__ddPanels || [];
                 if (panelIdx >= panels.length) return false;
                 const panel = panels[panelIdx];
@@ -754,7 +757,9 @@ class ScraperRunner:
                     }
                 }
                 return false;
-            }""", [exp["panelIdx"], exp["selector"], exp["text"]])
+            }""",
+                [exp["panelIdx"], exp["selector"], exp["text"]],
+            )
 
             if not clicked:
                 continue
@@ -772,18 +777,14 @@ class ScraperRunner:
                 return await self._click_harvested_item(page, match)
 
             # Recurse deeper
-            found = await self._expand_and_search_tree(
-                page, value, page_languages, children, depth + 1, max_depth
-            )
+            found = await self._expand_and_search_tree(page, value, page_languages, children, depth + 1, max_depth)
             if found:
                 return True
 
         await page.keyboard.press("Escape")
         return False
 
-    async def _apply_custom_dropdown(
-        self, page: Page, entry: FilterEntry, value: str, page_languages: list
-    ) -> bool:
+    async def _apply_custom_dropdown(self, page: Page, entry: FilterEntry, value: str, page_languages: list) -> bool:
         """
         Main orchestrator for custom dropdown interaction.
         Uses MutationObserver to detect panels, supports search and tree expansion.
@@ -818,9 +819,7 @@ class ScraperRunner:
                 return await self._click_harvested_item(page, match)
 
         # 7. Try tree expansion (nested/hierarchical dropdowns)
-        if await self._expand_and_search_tree(
-            page, value, page_languages, items, 0, max_depth
-        ):
+        if await self._expand_and_search_tree(page, value, page_languages, items, 0, max_depth):
             return True
 
         # 8. Nothing worked — close the dropdown

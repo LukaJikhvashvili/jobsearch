@@ -27,7 +27,7 @@
       "link_selector": null,
       "data_attribute": null,
       "click_container": true,
-      "notes": "The job card container has 'cursor-pointer' and no direct <a> tags pointing to the vacancy details, indicating a JS click handler on the card."
+      "notes": "The entire job card container has 'cursor-pointer' and triggers navigation via JavaScript click handler."
     },
     "filters": {
       "available": [
@@ -40,18 +40,10 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Search input field with placeholder 'ძებნა'"
-        },
-        {
-          "dimension": "location",
-          "mechanism": "search_field",
-          "param_name": "location",
-          "selector": ".location-dropdown input",
-          "options_selector": null,
-          "item_selector": null,
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "notes": "Location input field with placeholder 'მდებარეობა'"
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
+          "notes": "Search input field inside the keyword dropdown container"
         },
         {
           "dimension": "category",
@@ -62,11 +54,28 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Job types dropdown filter"
+          "panel_search_selector": null,
+          "is_nested": false,
+          "max_depth": null,
+          "notes": "Dropdown for selecting job types (მუშაობის ტიპები)"
+        },
+        {
+          "dimension": "location",
+          "mechanism": "dropdown",
+          "param_name": "location",
+          "selector": ".location-dropdown button",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "panel_search_selector": ".location-dropdown input",
+          "is_nested": false,
+          "max_depth": null,
+          "notes": "Location selection dropdown with an internal search input"
         }
       ],
       "submit_selector": null,
-      "notes": null
+      "notes": "Filters apply dynamically on selection/input change."
     }
   },
   "detail": null,
@@ -74,8 +83,8 @@
     "ka"
   ],
   "requires_js": true,
-  "generated_at": "2026-05-25T17:03:48.481637",
+  "generated_at": "2026-05-25T17:57:09.099806",
   "version": 1,
   "is_stale": false,
-  "notes": "The page uses React and TBCX font styles. Job cards do not contain direct anchor links, indicating navigation is handled via JS click events on the card container."
+  "notes": "The site is a modern React/Next.js application with dynamic filtering and pagination."
 }

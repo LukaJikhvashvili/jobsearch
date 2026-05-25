@@ -357,7 +357,13 @@ def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
 
 
 class SchemaGenerator:
-    def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None, event_bus=None, telemetry: Optional[TelemetryCollector] = None):
+    def __init__(
+        self,
+        primary: AIProvider,
+        fallback: Optional[AIProvider] = None,
+        event_bus=None,
+        telemetry: Optional[TelemetryCollector] = None,
+    ):
         self.primary = primary
         self.fallback = fallback
         self.event_bus = event_bus

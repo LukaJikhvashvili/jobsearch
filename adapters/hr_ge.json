@@ -6,11 +6,11 @@
     "container": "app-announcement-item",
     "fields": {
       "title": {
-        "selector": "a.title",
+        "selector": "a.title .title__text",
         "attr": "text"
       },
       "company": {
-        "selector": "a.company__title",
+        "selector": ".company__title",
         "attr": "text"
       }
     },
@@ -18,7 +18,7 @@
       "type": "url_param",
       "param_name": "pg",
       "start_page": 1,
-      "next_selector": "hrra-routable-paging a.item:has(svg-icon)",
+      "next_selector": "hrra-routable-paging a.item:has(.chevron--left)",
       "max_pages": 50,
       "delay_ms": 1500
     },
@@ -27,7 +27,7 @@
       "link_selector": "a.title",
       "data_attribute": null,
       "click_container": false,
-      "notes": "Each job card contains a direct anchor link pointing to the announcement detail page."
+      "notes": "Each job card contains a direct link to the announcement details page inside the 'a.title' element."
     },
     "filters": {
       "available": [
@@ -43,7 +43,7 @@
           "panel_search_selector": null,
           "is_nested": null,
           "max_depth": null,
-          "notes": "Sits inside the 'სიტყვით ძებნა' section"
+          "notes": "Text input for keyword search"
         },
         {
           "dimension": "location",
@@ -57,7 +57,7 @@
           "panel_search_selector": null,
           "is_nested": true,
           "max_depth": null,
-          "notes": "Tree select dropdown for location"
+          "notes": "Hierarchical location tree selector"
         },
         {
           "dimension": "category",
@@ -71,7 +71,21 @@
           "panel_search_selector": null,
           "is_nested": true,
           "max_depth": null,
-          "notes": "Specialization tree select dropdown"
+          "notes": "Specialization / Category tree selector"
+        },
+        {
+          "dimension": "category",
+          "mechanism": "dropdown",
+          "param_name": null,
+          "selector": "hrra-industry-tree-select p-treeselect",
+          "options_selector": null,
+          "item_selector": null,
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": true,
+          "max_depth": null,
+          "notes": "Industry tree selector"
         },
         {
           "dimension": "salary",
@@ -83,7 +97,7 @@
           "date_from_selector": null,
           "date_to_selector": null,
           "panel_search_selector": null,
-          "is_nested": null,
+          "is_nested": false,
           "max_depth": null,
           "notes": "Salary range dropdown selector"
         },
@@ -91,19 +105,19 @@
           "dimension": "date_posted",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": ".publish-date p-select",
+          "selector": "p-select.publishDateDropdown",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
           "panel_search_selector": null,
-          "is_nested": null,
+          "is_nested": false,
           "max_depth": null,
-          "notes": "Publish date dropdown selector"
+          "notes": "Publish date range dropdown selector"
         }
       ],
       "submit_selector": "button.search-btn",
-      "notes": "Filters are applied by clicking the search button 'ძებნა'."
+      "notes": "Filters are applied by clicking the search button with class 'search-btn'."
     }
   },
   "detail": null,
@@ -112,8 +126,8 @@
     "en"
   ],
   "requires_js": true,
-  "generated_at": "2026-05-25T17:03:48.469973",
+  "generated_at": "2026-05-25T17:56:05.848370",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is built with Angular, utilizing custom elements like app-announcement-item and p-select."
+  "notes": "The site is built with Angular, utilizing PrimeNG components like p-select, p-treeselect, and p-multiselect."
 }

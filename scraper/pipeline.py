@@ -155,8 +155,7 @@ class FilterDiscoveryStage(PipelineStage):
         from .models import FilterMechanism
 
         dropdown_entries = [
-            e for e in adapter.listings.filters.available
-            if e.mechanism == FilterMechanism.DROPDOWN and e.selector
+            e for e in adapter.listings.filters.available if e.mechanism == FilterMechanism.DROPDOWN and e.selector
         ]
         if not dropdown_entries:
             return context
@@ -253,9 +252,7 @@ class FilterDiscoveryStage(PipelineStage):
                         await page.wait_for_timeout(300)
 
                     except Exception as exc:
-                        logger.debug(
-                            "FilterDiscovery: failed for %s: %s", entry.selector, exc
-                        )
+                        logger.debug("FilterDiscovery: failed for %s: %s", entry.selector, exc)
                         continue
 
                 await page.close()

@@ -27,7 +27,7 @@
       "link_selector": null,
       "data_attribute": null,
       "click_container": true,
-      "notes": "The entire vacancy-card element acts as a clickable container triggering Angular router navigation; there are no direct anchor links to detail pages inside the card."
+      "notes": "The job cards do not contain direct anchor links to detail pages; navigation is handled via Angular click events on the card container."
     },
     "filters": {
       "available": [
@@ -40,55 +40,70 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
           "notes": "Search input field with placeholder 'ძებნა'"
-        },
-        {
-          "dimension": "category",
-          "mechanism": "checkbox_group",
-          "param_name": null,
-          "selector": "multi-selector[placeholder*='spheres']",
-          "options_selector": ".dropdown-menu-container",
-          "item_selector": ".form-check",
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "notes": "Category dropdown filter containing checkboxes"
-        },
-        {
-          "dimension": "location",
-          "mechanism": "checkbox_group",
-          "param_name": null,
-          "selector": "multi-selector[placeholder*='cities']",
-          "options_selector": ".dropdown-menu-container",
-          "item_selector": ".form-check",
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "notes": "City/Region dropdown filter containing checkboxes"
         },
         {
           "dimension": "salary",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": "salary-range-selector",
-          "options_selector": ".dropdown-menu-container",
+          "selector": "salary-range-selector button.dropdown-toggle",
+          "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Salary range selector dropdown containing a checkbox and a slider"
+          "panel_search_selector": null,
+          "is_nested": false,
+          "max_depth": null,
+          "notes": "Opens a dropdown panel containing a checkbox and a range slider"
         },
         {
-          "dimension": "date_posted",
-          "mechanism": "radio_group",
+          "dimension": "category",
+          "mechanism": "dropdown",
           "param_name": null,
-          "selector": "date-group-selector",
+          "selector": "multi-selector[placeholder='general.spheres.placeholder'] button.dropdown-toggle",
           "options_selector": ".dropdown-menu-container",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Date posted filter containing radio buttons"
+          "panel_search_selector": null,
+          "is_nested": false,
+          "max_depth": null,
+          "notes": "Category multi-select dropdown"
+        },
+        {
+          "dimension": "location",
+          "mechanism": "dropdown",
+          "param_name": null,
+          "selector": "multi-selector[placeholder='general.cities.city_or_region'] button.dropdown-toggle",
+          "options_selector": ".dropdown-menu-container",
+          "item_selector": ".form-check",
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": false,
+          "max_depth": null,
+          "notes": "City/Region multi-select dropdown"
+        },
+        {
+          "dimension": "date_posted",
+          "mechanism": "dropdown",
+          "param_name": null,
+          "selector": "date-group-selector button.dropdown-toggle",
+          "options_selector": ".dropdown-menu-container",
+          "item_selector": ".form-check",
+          "date_from_selector": null,
+          "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": false,
+          "max_depth": null,
+          "notes": "Date posted filter dropdown with radio buttons"
         }
       ],
       "submit_selector": null,
-      "notes": "Filters apply dynamically on change/selection without requiring a manual submit button click."
+      "notes": "Filters apply dynamically on selection without requiring a submit button."
     }
   },
   "detail": null,
@@ -97,8 +112,8 @@
     "en"
   ],
   "requires_js": true,
-  "generated_at": "2026-05-25T17:03:48.477700",
+  "generated_at": "2026-05-25T17:56:41.363534",
   "version": 1,
   "is_stale": false,
-  "notes": "The page is a modern Angular single-page application featuring a split-screen layout with a job list on the left and a Google Map on the right."
+  "notes": "The page is a dynamic Angular application featuring a split-screen layout with a job list on the left and a Google Map on the right."
 }
