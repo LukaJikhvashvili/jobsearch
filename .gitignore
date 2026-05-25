@@ -1,11 +1,10 @@
-*csv
-.venv
 __pycache__/
-*.ipynb
+.cache/
 
-.env
+.venv
 .env*
 
-GEMINI.md
+*.ipynb
 
+GEMINI.md
 TODO

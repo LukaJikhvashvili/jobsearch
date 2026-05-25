@@ -6,11 +6,11 @@
     "container": "app-announcement-item",
     "fields": {
       "title": {
-        "selector": ".title__text",
+        "selector": "a.title",
         "attr": "text"
       },
       "company": {
-        "selector": ".company__title",
+        "selector": "a.company__title",
         "attr": "text"
       }
     },
@@ -18,8 +18,8 @@
       "type": "url_param",
       "param_name": "pg",
       "start_page": 1,
-      "next_selector": "a.item:has(svg-icon[src*='chevron-right'])",
-      "max_pages": 30,
+      "next_selector": "hrra-routable-paging a.item:has(svg-icon)",
+      "max_pages": 50,
       "delay_ms": 1500
     },
     "navigation": {
@@ -27,7 +27,7 @@
       "link_selector": "a.title",
       "data_attribute": null,
       "click_container": false,
-      "notes": "Each job card contains a standard anchor tag with a direct URL to the announcement."
+      "notes": "Each job card contains a direct anchor link pointing to the announcement detail page."
     },
     "filters": {
       "available": [
@@ -40,7 +40,7 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Sits inside the 'სიტყვით ძებნა' section"
         },
         {
           "dimension": "location",
@@ -51,7 +51,7 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Tree select dropdown for location"
         },
         {
           "dimension": "category",
@@ -62,33 +62,33 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Specialization tree select dropdown"
         },
         {
           "dimension": "salary",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": ".salaryOptionDropdown",
+          "selector": "hrra-salary p-select",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Salary range dropdown selector"
         },
         {
           "dimension": "date_posted",
           "mechanism": "dropdown",
           "param_name": null,
-          "selector": ".publishDateDropdown",
+          "selector": ".publish-date p-select",
           "options_selector": null,
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Publish date dropdown selector"
         }
       ],
       "submit_selector": "button.search-btn",
-      "notes": "Filters use custom Angular/PrimeNG components. Location and Specialization use tree-select structures."
+      "notes": "Filters are applied by clicking the search button 'ძებნა'."
     }
   },
   "detail": null,
@@ -97,8 +97,8 @@
     "en"
   ],
   "requires_js": true,
-  "generated_at": "2026-04-25T20:42:18.697264",
+  "generated_at": "2026-05-25T16:21:17.681085",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a modern Angular application using PrimeNG components (p-select, p-treeselect). Listings are rendered dynamically."
+  "notes": "The site is built with Angular, utilizing custom elements like app-announcement-item and p-select."
 }

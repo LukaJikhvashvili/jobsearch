@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from .models import SiteAdapter
+from .config import StorageConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,18 @@ _STALE_AFTER_DAYS = 30
 
 
 class AdapterStore:
-    def __init__(self, directory: Path = _DEFAULT_DIR):
-        self.directory = Path(directory)
+    def __init__(
+        self,
+        directory: Path = _DEFAULT_DIR,
+        stale_after_days: int = _STALE_AFTER_DAYS,
+        storage_config: Optional[StorageConfig] = None,
+    ):
+        if storage_config is not None:
+            self.directory = Path(storage_config.adapter_directory)
+            self._stale_after_days = storage_config.stale_after_days
+        else:
+            self.directory = Path(directory)
+            self._stale_after_days = stale_after_days
         self.directory.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ helpers
@@ -35,7 +46,7 @@ class AdapterStore:
         return self.directory / f"{safe}.json"
 
     def _is_stale(self, adapter: SiteAdapter) -> bool:
-        cutoff = datetime.utcnow() - timedelta(days=_STALE_AFTER_DAYS)
+        cutoff = datetime.utcnow() - timedelta(days=self._stale_after_days)
         return adapter.generated_at < cutoff
 
     # ------------------------------------------------------------------ CRUD
@@ -54,7 +65,7 @@ class AdapterStore:
             data = json.loads(path.read_text(encoding="utf-8"))
             adapter = SiteAdapter.model_validate(data)
             if self._is_stale(adapter):
-                logger.info("Adapter stale (>%d days)  site=%s", _STALE_AFTER_DAYS, site)
+                logger.info("Adapter stale (>%d days)  site=%s", self._stale_after_days, site)
                 adapter.is_stale = True
             return adapter
         except Exception as exc:

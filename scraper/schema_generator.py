@@ -24,7 +24,7 @@ from .models import SiteAdapter
 
 logger = logging.getLogger(__name__)
 
-MAX_OUTPUT_TOKENS = 8192  # Adjust as needed based on expected schema size and LLM limits
+MAX_OUTPUT_TOKENS = 8192
 
 # ---------------------------------------------------------------------------
 _SHARED_RULES = """STRICT RULES:
@@ -162,11 +162,19 @@ class AIProvider(ABC):
 
 
 class GeminiProvider(AIProvider):
-    def __init__(self, api_key: str):
+    def __init__(
+        self,
+        api_key: str,
+        model: Optional[str] = None,
+        max_output_tokens: int = MAX_OUTPUT_TOKENS,
+        temperature: float = 0.1,
+    ):
         from google import genai
         from google.genai import types
 
-        self._model_name = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+        self._model_name = model or os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+        self._max_output_tokens = max_output_tokens
+        self._temperature = temperature
         self._client = genai.Client(api_key=api_key)
         self._types = types
 
@@ -176,8 +184,8 @@ class GeminiProvider(AIProvider):
             contents=f"{system}\n\n{user}",
             config=self._types.GenerateContentConfig(
                 response_mime_type="application/json",
-                temperature=0.1,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
+                temperature=self._temperature,
+                max_output_tokens=self._max_output_tokens,
             ),
         )
         return response.text
@@ -188,16 +196,22 @@ class GeminiProvider(AIProvider):
 
 
 class ClaudeProvider(AIProvider):
-    def __init__(self, api_key: str, model: str = "claude-haiku-4-5-20251001"):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "claude-haiku-4-5-20251001",
+        max_output_tokens: int = MAX_OUTPUT_TOKENS,
+    ):
         import anthropic
 
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = model
+        self._max_output_tokens = max_output_tokens
 
     def generate(self, system: str, user: str) -> str:
         response = self._client.messages.create(
             model=self._model,
-            max_tokens=MAX_OUTPUT_TOKENS,
+            max_tokens=self._max_output_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
         )
@@ -329,9 +343,10 @@ def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
 
 
 class SchemaGenerator:
-    def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None):
+    def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None, event_bus=None):
         self.primary = primary
         self.fallback = fallback
+        self.event_bus = event_bus
 
     def generate(self, site: str, listings_url: str, listings_html: str) -> SiteAdapter:
         """
@@ -362,9 +377,43 @@ class SchemaGenerator:
         last_error: Exception = RuntimeError("No providers configured")
         for provider in providers:
             try:
+                if self.event_bus:
+                    import asyncio
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    # Fire-and-forget in sync context; skip if no loop
+                    if loop and loop.is_running():
+                        loop.create_task(self.event_bus.publish("llm_call_started", site=site, provider=provider.name))
+
                 logger.info("Generating schema  site=%s  provider=%s", site, provider.name)
-                return provider.generate(system, user)
+                result = provider.generate(system, user)
+
+                if self.event_bus:
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    if loop and loop.is_running():
+                        loop.create_task(self.event_bus.publish("llm_call_completed", site=site, provider=provider.name))
+
+                return result
             except Exception as exc:
                 logger.warning("%s failed for %s: %s", provider.name, site, exc)
                 last_error = exc
+
+                if self.event_bus:
+                    import asyncio
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    if loop and loop.is_running():
+                        loop.create_task(
+                            self.event_bus.publish("llm_call_failed", site=site, provider=provider.name, error=str(exc))
+                        )
+
         raise RuntimeError(f"All providers failed for {site}") from last_error

@@ -1,12 +1,12 @@
 {
   "site": "jobs.ge",
-  "base_url": "https://jobs.ge/",
+  "base_url": "https://jobs.ge",
   "listings_url": "https://jobs.ge/",
   "listings": {
-    "container": "tr:has(td:nth-child(2) a[href*='view=jobs'])",
+    "container": "div.vipEntries table tr:has(a.vip), #job_list_table tr:has(a.vip)",
     "fields": {
       "title": {
-        "selector": "td:nth-child(2) a.vip",
+        "selector": "a.vip",
         "attr": "text"
       },
       "company": {
@@ -24,10 +24,10 @@
     },
     "navigation": {
       "type": "direct_link",
-      "link_selector": "td:nth-child(2) a.vip",
+      "link_selector": "a.vip",
       "data_attribute": null,
       "click_container": false,
-      "notes": "The job title link points directly to the job details page."
+      "notes": "The job title link (a.vip) points directly to the job details page."
     },
     "filters": {
       "available": [
@@ -40,44 +40,33 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Keyword search input field"
         },
         {
           "dimension": "category",
           "mechanism": "dropdown",
           "param_name": "cid",
           "selector": "select[name='cid']",
-          "options_selector": null,
+          "options_selector": "option",
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Category selection dropdown"
         },
         {
           "dimension": "location",
           "mechanism": "dropdown",
           "param_name": "lid",
           "selector": "select[name='lid']",
-          "options_selector": null,
+          "options_selector": "option",
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
-        },
-        {
-          "dimension": "salary",
-          "mechanism": "checkbox_group",
-          "param_name": "has_salary",
-          "selector": "input[name='has_salary']",
-          "options_selector": null,
-          "item_selector": null,
-          "date_from_selector": null,
-          "date_to_selector": null,
-          "notes": "Checkbox for 'Only with salary'"
+          "notes": "Location selection dropdown"
         }
       ],
       "submit_selector": "div.searchBtn a",
-      "notes": "The search button triggers a JavaScript form submit."
+      "notes": "Filters are submitted via the search button or automatically on checkbox click."
     }
   },
   "detail": null,
@@ -86,8 +75,8 @@
     "en"
   ],
   "requires_js": false,
-  "generated_at": "2026-04-25T20:30:41.973388",
+  "generated_at": "2026-05-25T16:20:47.650111",
   "version": 1,
   "is_stale": false,
-  "notes": "The site uses a table-based layout for listings, split into VIP and Regular sections. Pagination is handled via a 'page' query parameter as evidenced by the hidden input in the search form."
+  "notes": "The site lists jobs in two main tables: VIP entries and Regular entries. Both share a similar row-based structure."
 }

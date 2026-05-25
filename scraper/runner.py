@@ -15,6 +15,8 @@ import logging
 from typing import AsyncIterator, Optional
 from urllib.parse import urljoin, urlparse, urlencode, parse_qs, urlunparse
 
+from .config import PlaywrightConfig
+
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
@@ -39,10 +41,6 @@ from .filter_match import (
 )
 
 logger = logging.getLogger(__name__)
-
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " "AppleWebKit/537.36 (KHTML, like Gecko) " "Chrome/124.0.0.0 Safari/537.36"
-)
 
 # ---------------------------------------------------------------------------
 # Field extraction
@@ -77,17 +75,29 @@ def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str 
 
 
 class ScraperRunner:
-    def __init__(self, adapter: SiteAdapter, headless: bool = True):
+    def __init__(
+        self,
+        adapter: SiteAdapter,
+        headless: bool = True,
+        playwright_config: Optional[PlaywrightConfig] = None,
+        event_bus=None,
+    ):
         self.adapter = adapter
-        self.headless = headless
+        if playwright_config is not None:
+            self._pw_config = playwright_config
+        else:
+            self._pw_config = PlaywrightConfig(headless=headless)
+        self.headless = self._pw_config.headless
+        self.event_bus = event_bus
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
 
     async def __aenter__(self) -> "ScraperRunner":
+        cfg = self._pw_config
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
-            headless=self.headless,
+            headless=cfg.headless,
             args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"],
         )
         # Use the first page language as the browser locale.
@@ -105,15 +115,16 @@ class ScraperRunner:
         locale = locale_map.get(lang, f"{lang}-{lang.upper()}")
 
         self._context = await self._browser.new_context(
-            user_agent=_USER_AGENT,
-            viewport={"width": 1280, "height": 900},
+            user_agent=cfg.user_agent,
+            viewport={"width": cfg.viewport_width, "height": cfg.viewport_height},
             locale=locale,
             java_script_enabled=True,
             ignore_https_errors=True,
         )
         # Block images/fonts — speeds up scraping significantly
+        block_pattern = ",".join(cfg.block_resources)
         await self._context.route(
-            "**/*.{png,jpg,jpeg,gif,webp,woff,woff2,ttf,otf}",
+            f"**/*.{{{block_pattern}}}",
             lambda route: route.abort(),
         )
         return self
@@ -142,12 +153,15 @@ class ScraperRunner:
         adapter = self.adapter
         page_languages = list(adapter.page_languages)
 
+        if self.event_bus:
+            await self.event_bus.publish("scraping_started", site=adapter.site)
+
         # Step 1 — build filtered start URL (URL params injected)
         start_url = self._build_filtered_url(adapter.listings_url, filters, page_languages)
 
         page: Page = await self._context.new_page()
         try:
-            await page.goto(start_url, wait_until="domcontentloaded", timeout=30_000)
+            await page.goto(start_url, wait_until="domcontentloaded", timeout=self._pw_config.navigation_timeout_ms)
         except Exception as exc:
             logger.error("Failed to load %s: %s", start_url, exc)
             await page.close()
@@ -209,6 +223,12 @@ class ScraperRunner:
                     adapter_version=adapter.version,
                 )
 
+            if self.event_bus:
+                await self.event_bus.publish("scraping_page_completed", site=adapter.site, url=current_page.url)
+
+        if self.event_bus:
+            await self.event_bus.publish("scraping_completed", site=adapter.site)
+
         await page.close()
 
     # ================================================================== FILTERING
@@ -268,10 +288,14 @@ class ScraperRunner:
                 if ok:
                     applied_any = True
                     logger.info("Filter applied: %s=%s (%s)", entry.dimension, value, entry.mechanism)
+                    if self.event_bus:
+                        await self.event_bus.publish("filter_applied", dimension=entry.dimension, value=value)
                 else:
                     logger.warning("Filter not applied (no match): %s=%s", entry.dimension, value)
             except Exception as exc:
                 logger.warning("Filter error: %s=%s — %s", entry.dimension, value, exc)
+                if self.event_bus:
+                    await self.event_bus.publish("filter_failed", dimension=entry.dimension, error=str(exc))
 
         if not applied_any:
             return
@@ -312,9 +336,7 @@ class ScraperRunner:
             await sel.wait_for(state="visible", timeout=5_000)
 
             # Check if it's a standard <select> element
-            is_select = await page.evaluate(
-                "([sel]) => document.querySelector(sel)?.tagName === 'SELECT'", [entry.selector]
-            )
+            is_select = await page.evaluate("([sel]) => document.querySelector(sel)?.tagName === 'SELECT'", [entry.selector])
 
             if is_select:
                 # Try exact label match first

@@ -10,7 +10,7 @@
         "attr": "text"
       },
       "company": {
-        "selector": ".company-info p.font-bold",
+        "selector": ".company-info p",
         "attr": "text"
       }
     },
@@ -20,14 +20,14 @@
       "start_page": 1,
       "next_selector": null,
       "max_pages": 50,
-      "delay_ms": 1200
+      "delay_ms": 1500
     },
     "navigation": {
       "type": "card_click",
       "link_selector": null,
       "data_attribute": null,
       "click_container": true,
-      "notes": "No <a> tags pointing to job details are present inside the vacancy-card component; navigation is handled via Angular click events on the card container."
+      "notes": "The entire vacancy-card element acts as a clickable container triggering Angular router navigation; there are no direct anchor links to detail pages inside the card."
     },
     "filters": {
       "available": [
@@ -40,55 +40,55 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Search input field with placeholder 'ძებნა'"
         },
         {
           "dimension": "category",
           "mechanism": "checkbox_group",
           "param_name": null,
           "selector": "multi-selector[placeholder*='spheres']",
-          "options_selector": ".dropdown-menu",
+          "options_selector": ".dropdown-menu-container",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Selector based on the Angular component and its placeholder attribute."
+          "notes": "Category dropdown filter containing checkboxes"
         },
         {
           "dimension": "location",
           "mechanism": "checkbox_group",
           "param_name": null,
           "selector": "multi-selector[placeholder*='cities']",
-          "options_selector": ".dropdown-menu",
+          "options_selector": ".dropdown-menu-container",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "City/Region dropdown filter containing checkboxes"
         },
         {
           "dimension": "salary",
           "mechanism": "dropdown",
           "param_name": null,
           "selector": "salary-range-selector",
-          "options_selector": ".dropdown-menu",
-          "item_selector": ".form-check",
+          "options_selector": ".dropdown-menu-container",
+          "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": "Contains a checkbox for 'salaried only' and a range slider."
+          "notes": "Salary range selector dropdown containing a checkbox and a slider"
         },
         {
           "dimension": "date_posted",
           "mechanism": "radio_group",
           "param_name": null,
           "selector": "date-group-selector",
-          "options_selector": ".dropdown-menu",
+          "options_selector": ".dropdown-menu-container",
           "item_selector": ".form-check",
           "date_from_selector": null,
           "date_to_selector": null,
-          "notes": null
+          "notes": "Date posted filter containing radio buttons"
         }
       ],
       "submit_selector": null,
-      "notes": "Filters in this Angular app typically apply immediately upon selection or when the dropdown is closed."
+      "notes": "Filters apply dynamically on change/selection without requiring a manual submit button click."
     }
   },
   "detail": null,
@@ -97,8 +97,8 @@
     "en"
   ],
   "requires_js": true,
-  "generated_at": "2026-04-25T20:42:47.351943",
+  "generated_at": "2026-05-25T16:28:39.215511",
   "version": 1,
   "is_stale": false,
-  "notes": "The site is a modern Angular application. Job cards are custom components that likely use JavaScript for navigation as no direct anchor tags are present within the card structure. Pagination appears to be infinite scroll based on the scrollable container classes."
+  "notes": "The page is a modern Angular single-page application featuring a split-screen layout with a job list on the left and a Google Map on the right."
 }
