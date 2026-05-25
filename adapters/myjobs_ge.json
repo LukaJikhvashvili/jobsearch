@@ -74,7 +74,7 @@
     "ka"
   ],
   "requires_js": true,
-  "generated_at": "2026-05-25T16:29:16.040035",
+  "generated_at": "2026-05-25T17:03:48.481637",
   "version": 1,
   "is_stale": false,
   "notes": "The page uses React and TBCX font styles. Job cards do not contain direct anchor links, indicating navigation is handled via JS click events on the card container."

@@ -1,4 +1,5 @@
 """Pluggable field extraction system."""
+
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
@@ -134,6 +135,7 @@ class GenericFieldExtractor(FieldExtractor):
 
 
 # ---- Registry / Pipeline ----
+
 
 class ExtractorPipeline:
     """Runs a list of FieldExtractors in order, merging results."""

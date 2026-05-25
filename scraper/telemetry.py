@@ -1,6 +1,6 @@
 """Structured telemetry collection for scraper operations."""
+
 import logging
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MetricEvent:
     """A single recorded metric."""
+
     name: str
     value: float
     tags: Dict[str, str] = field(default_factory=dict)
@@ -21,6 +22,7 @@ class MetricEvent:
 @dataclass
 class SpanRecord:
     """A timed operation span."""
+
     operation: str
     site: str
     started_at: datetime
@@ -91,8 +93,11 @@ class TelemetryCollector:
         status = "OK" if record.success else f"FAIL: {record.error}"
         logger.info(
             "[Telemetry] %s  site=%s  duration=%.2fs  status=%s  %s",
-            record.operation, record.site, record.duration_s or 0,
-            status, record.metadata,
+            record.operation,
+            record.site,
+            record.duration_s or 0,
+            status,
+            record.metadata,
         )
         for cb in self._on_span_callbacks:
             try:

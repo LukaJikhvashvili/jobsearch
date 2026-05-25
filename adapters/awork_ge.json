@@ -97,7 +97,7 @@
     "en"
   ],
   "requires_js": true,
-  "generated_at": "2026-05-25T16:28:39.215511",
+  "generated_at": "2026-05-25T17:03:48.477700",
   "version": 1,
   "is_stale": false,
   "notes": "The page is a modern Angular single-page application featuring a split-screen layout with a job list on the left and a Google Map on the right."

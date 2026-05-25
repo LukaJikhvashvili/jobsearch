@@ -75,7 +75,7 @@
     "en"
   ],
   "requires_js": false,
-  "generated_at": "2026-05-25T16:20:47.650111",
+  "generated_at": "2026-05-25T17:03:48.457623",
   "version": 1,
   "is_stale": false,
   "notes": "The site lists jobs in two main tables: VIP entries and Regular entries. Both share a similar row-based structure."

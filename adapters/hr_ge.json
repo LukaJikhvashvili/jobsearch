@@ -97,7 +97,7 @@
     "en"
   ],
   "requires_js": true,
-  "generated_at": "2026-05-25T16:21:17.681085",
+  "generated_at": "2026-05-25T17:03:48.469973",
   "version": 1,
   "is_stale": false,
   "notes": "The site is built with Angular, utilizing custom elements like app-announcement-item and p-select."
