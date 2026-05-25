@@ -341,7 +341,10 @@ class ScraperRunner:
             await sel.wait_for(state="visible", timeout=5_000)
 
             # Check if it's a standard <select> element
-            is_select = await page.evaluate("([sel]) => document.querySelector(sel)?.tagName === 'SELECT'", [entry.selector])
+            is_select = await page.evaluate(
+                "([sel]) => document.querySelector(sel)?.tagName === 'SELECT'",
+                [entry.selector],
+            )
 
             if is_select:
                 # Try exact label match first
@@ -351,32 +354,34 @@ class ScraperRunner:
                 except Exception:
                     pass
 
-            # Fuzzy match across all options (or custom elements that might have 'options' property)
-            options_info = await page.evaluate(
-                """([sel]) => {
-                    const el = document.querySelector(sel);
-                    if (!el || !el.options) return [];
-                    return Array.from(el.options).map((o, i) => (
-                        {i, text: o.text || o.innerText || '', value: o.value}
-                    ));
-                }""",
-                [entry.selector],
-            )
-            best_score, best_val = 0, None
-            for opt in options_info:
-                score = best_match_score(value, opt["text"], page_languages)
-                if score > best_score:
-                    best_score, best_val = score, opt["value"]
-            if best_val is not None and best_score >= THRESHOLD:
-                await page.evaluate(
-                    """([sel, val]) => {
+                # Fuzzy match across all <select> options
+                options_info = await page.evaluate(
+                    """([sel]) => {
                         const el = document.querySelector(sel);
-                        if (el) { el.value = val; el.dispatchEvent(new Event('change')); }
+                        if (!el || !el.options) return [];
+                        return Array.from(el.options).map((o, i) => (
+                            {i, text: o.text || o.innerText || '', value: o.value}
+                        ));
                     }""",
-                    [entry.selector, best_val],
+                    [entry.selector],
                 )
-                return True
-            return False
+                best_score, best_val = 0, None
+                for opt in options_info:
+                    score = best_match_score(value, opt["text"], page_languages)
+                    if score > best_score:
+                        best_score, best_val = score, opt["value"]
+                if best_val is not None and best_score >= THRESHOLD:
+                    await page.evaluate(
+                        """([sel, val]) => {
+                            const el = document.querySelector(sel);
+                            if (el) { el.value = val; el.dispatchEvent(new Event('change')); }
+                        }""",
+                        [entry.selector, best_val],
+                    )
+                    return True
+
+            # Universal custom dropdown fallback
+            return await self._apply_custom_dropdown(page, entry, value, page_languages)
 
         # ── Tag filter ──────────────────────────────────────────────────────
         elif entry.mechanism == FilterMechanism.TAG_FILTER:
@@ -517,6 +522,309 @@ class ScraperRunner:
             elapsed += poll_ms
             if await self._count_cards(page) != before:
                 return True
+        return False
+
+    # ================================================================== CUSTOM DROPDOWN
+
+    async def _install_mutation_observer(self, page: Page) -> None:
+        """Install a MutationObserver on document.body that records added Element nodes."""
+        await page.evaluate("""() => {
+            window.__ddAdded = [];
+            window.__ddPanels = [];
+            window.__ddObserver = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) {
+                        if (node.nodeType === 1) window.__ddAdded.push(node);
+                    }
+                }
+            });
+            window.__ddObserver.observe(document.body, { childList: true, subtree: true });
+        }""")
+
+    async def _harvest_dropdown_items(self, page: Page) -> list:
+        """Disconnect observer and extract visible text items from added panels."""
+        return await page.evaluate("""() => {
+            if (window.__ddObserver) window.__ddObserver.disconnect();
+            const panels = window.__ddAdded || [];
+            window.__ddPanels = panels;
+            const results = [];
+            for (let pi = 0; pi < panels.length; pi++) {
+                const panel = panels[pi];
+                if (!panel.querySelectorAll) continue;
+                let items = panel.querySelectorAll(
+                    'li, [role="option"], [role="treeitem"], [role="menuitem"]'
+                );
+                if (items.length === 0) {
+                    items = panel.querySelectorAll('*');
+                    items = Array.from(items).filter(
+                        el => el.children.length === 0 && el.textContent.trim()
+                    );
+                }
+                for (let ei = 0; ei < items.length; ei++) {
+                    const text = (items[ei].textContent || '').trim();
+                    if (text) results.push({ text, panelIdx: pi, elIdx: ei });
+                }
+            }
+            return results;
+        }""")
+
+    async def _harvest_visible_items_in_panel(self, page: Page) -> list:
+        """Scan all currently visible items in stored panels (for post-search picking)."""
+        return await page.evaluate("""() => {
+            const panels = window.__ddPanels || [];
+            const results = [];
+            for (let pi = 0; pi < panels.length; pi++) {
+                const panel = panels[pi];
+                if (!panel.querySelectorAll) continue;
+                let items = panel.querySelectorAll(
+                    'li, [role="option"], [role="treeitem"], [role="menuitem"]'
+                );
+                if (items.length === 0) {
+                    items = panel.querySelectorAll('*');
+                    items = Array.from(items).filter(
+                        el => el.children.length === 0 && el.textContent.trim()
+                    );
+                }
+                for (let ei = 0; ei < items.length; ei++) {
+                    const el = items[ei];
+                    if (!el.offsetParent && el.style?.display === 'none') continue;
+                    const text = (el.textContent || '').trim();
+                    if (text) results.push({ text, panelIdx: pi, elIdx: ei });
+                }
+            }
+            return results;
+        }""")
+
+    def _fuzzy_pick(self, items: list, value: str, page_languages: list) -> dict | None:
+        """Run fuzzy matching against harvested items, return best match above THRESHOLD."""
+        best_score, best_match = 0.0, None
+        for item in items:
+            score = best_match_score(value, item["text"], page_languages)
+            if score > best_score:
+                best_score = score
+                best_match = item
+        if best_match and best_score >= THRESHOLD:
+            return best_match
+        return None
+
+    async def _click_harvested_item(self, page: Page, match: dict) -> bool:
+        """Click an item by locating it in the stored panels via text content match."""
+        clicked = await page.evaluate("""([panelIdx, elIdx, text]) => {
+            const panels = window.__ddPanels || [];
+            if (panelIdx >= panels.length) return false;
+            const panel = panels[panelIdx];
+            if (!panel.querySelectorAll) return false;
+            let items = panel.querySelectorAll(
+                'li, [role="option"], [role="treeitem"], [role="menuitem"]'
+            );
+            if (items.length === 0) {
+                items = Array.from(panel.querySelectorAll('*')).filter(
+                    el => el.children.length === 0 && el.textContent.trim()
+                );
+            }
+            if (elIdx < items.length) {
+                items[elIdx].click();
+                return true;
+            }
+            // Fallback: find by text
+            for (const el of items) {
+                if ((el.textContent || '').trim() === text) {
+                    el.click();
+                    return true;
+                }
+            }
+            return false;
+        }""", [match["panelIdx"], match["elIdx"], match["text"]])
+        return bool(clicked)
+
+    async def _try_panel_search(
+        self, page: Page, entry: FilterEntry, value: str, page_languages: list
+    ) -> bool:
+        """Try to use the search input inside the dropdown panel to filter options."""
+        search_selector = entry.panel_search_selector
+        if not search_selector:
+            # Auto-detect search input in added panels
+            search_selector = await page.evaluate("""() => {
+                const panels = window.__ddAdded || [];
+                const selectors = [
+                    'input[type="search"]', 'input[type="text"]',
+                    'input[placeholder*="search" i]', 'input[role="searchbox"]',
+                    '.p-treeselect-filter', '.p-select-filter',
+                    'input[placeholder*="filter" i]'
+                ];
+                for (const panel of panels) {
+                    if (!panel.querySelector) continue;
+                    for (const sel of selectors) {
+                        const inp = panel.querySelector(sel);
+                        if (inp) {
+                            // Build a usable selector
+                            if (inp.id) return '#' + inp.id;
+                            if (inp.className && typeof inp.className === 'string') {
+                                const cls = inp.className.trim().split(/\\s+/);
+                                if (cls.length) return inp.tagName.toLowerCase() + '.' + cls.join('.');
+                            }
+                            return sel;
+                        }
+                    }
+                }
+                return null;
+            }""")
+
+        if not search_selector:
+            return False
+
+        try:
+            inp = page.locator(search_selector).first
+            if not await inp.is_visible(timeout=2_000):
+                return False
+            input_value = get_best_translated_input(value, page_languages)
+            await inp.fill(input_value)
+            await page.wait_for_timeout(600)
+
+            items = await self._harvest_visible_items_in_panel(page)
+            match = self._fuzzy_pick(items, value, page_languages)
+            if match:
+                return await self._click_harvested_item(page, match)
+        except Exception as exc:
+            logger.debug("Panel search failed: %s", exc)
+
+        return False
+
+    async def _expand_and_search_tree(
+        self, page: Page, value: str, page_languages: list,
+        current_items: list, depth: int, max_depth: int,
+    ) -> bool:
+        """Recursively expand tree nodes and search for the target value."""
+        if depth >= max_depth:
+            await page.keyboard.press("Escape")
+            return False
+
+        # Find expandable elements in currently visible panels
+        expandables = await page.evaluate("""() => {
+            const panels = window.__ddPanels || [];
+            const results = [];
+            const selectors = [
+                '[aria-expanded="false"]', '.p-treenode-toggle',
+                '[class*="expand"]', '[class*="toggle"]', '[role="treeitem"]'
+            ];
+            for (let pi = 0; pi < panels.length; pi++) {
+                const panel = panels[pi];
+                if (!panel.querySelectorAll) continue;
+                const seen = new Set();
+                for (const sel of selectors) {
+                    for (const el of panel.querySelectorAll(sel)) {
+                        if (seen.has(el)) continue;
+                        seen.add(el);
+                        const text = (el.textContent || '').trim().substring(0, 100);
+                        results.push({ panelIdx: pi, text, selector: sel });
+                    }
+                }
+            }
+            return results;
+        }""")
+
+        if not expandables:
+            return False
+
+        # Score expandables by partial match to prioritize relevant branches
+        scored = []
+        for exp in expandables:
+            score = best_match_score(value, exp["text"], page_languages)
+            scored.append((score, exp))
+        scored.sort(key=lambda x: -x[0])
+
+        for _score, exp in scored:
+            # Install fresh observer before expanding
+            await self._install_mutation_observer(page)
+
+            # Click the expandable element
+            clicked = await page.evaluate("""([panelIdx, selector, text]) => {
+                const panels = window.__ddPanels || [];
+                if (panelIdx >= panels.length) return false;
+                const panel = panels[panelIdx];
+                const candidates = panel.querySelectorAll(selector);
+                for (const el of candidates) {
+                    if ((el.textContent || '').trim().substring(0, 100) === text) {
+                        // Click toggle button if present, otherwise click the element
+                        const toggle = el.querySelector(
+                            '.p-treenode-toggle, [class*="toggle"], button'
+                        );
+                        (toggle || el).click();
+                        return true;
+                    }
+                }
+                return false;
+            }""", [exp["panelIdx"], exp["selector"], exp["text"]])
+
+            if not clicked:
+                continue
+
+            await page.wait_for_timeout(400)
+
+            # Harvest newly revealed children
+            children = await self._harvest_dropdown_items(page)
+            if not children:
+                continue
+
+            # Check for a direct match among children
+            match = self._fuzzy_pick(children, value, page_languages)
+            if match:
+                return await self._click_harvested_item(page, match)
+
+            # Recurse deeper
+            found = await self._expand_and_search_tree(
+                page, value, page_languages, children, depth + 1, max_depth
+            )
+            if found:
+                return True
+
+        await page.keyboard.press("Escape")
+        return False
+
+    async def _apply_custom_dropdown(
+        self, page: Page, entry: FilterEntry, value: str, page_languages: list
+    ) -> bool:
+        """
+        Main orchestrator for custom dropdown interaction.
+        Uses MutationObserver to detect panels, supports search and tree expansion.
+        """
+        max_depth = entry.max_depth or 3
+
+        # 1. Install MutationObserver
+        await self._install_mutation_observer(page)
+
+        # 2. Click the trigger element
+        try:
+            trigger = page.locator(entry.selector).first
+            await trigger.click()
+        except Exception as exc:
+            logger.warning("Custom dropdown trigger click failed: %s", exc)
+            return False
+
+        # 3. Wait for panel to appear
+        await page.wait_for_timeout(500)
+
+        # 4. Try panel search first (fastest path for searchable dropdowns)
+        if await self._try_panel_search(page, entry, value, page_languages):
+            return True
+
+        # 5. Harvest items from the panel
+        items = await self._harvest_dropdown_items(page)
+
+        # 6. Try direct fuzzy match
+        if items:
+            match = self._fuzzy_pick(items, value, page_languages)
+            if match:
+                return await self._click_harvested_item(page, match)
+
+        # 7. Try tree expansion (nested/hierarchical dropdowns)
+        if await self._expand_and_search_tree(
+            page, value, page_languages, items, 0, max_depth
+        ):
+            return True
+
+        # 8. Nothing worked — close the dropdown
+        await page.keyboard.press("Escape")
         return False
 
     # ================================================================== NAVIGATION

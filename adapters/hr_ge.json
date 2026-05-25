@@ -40,6 +40,9 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
           "notes": "Sits inside the 'სიტყვით ძებნა' section"
         },
         {
@@ -51,6 +54,9 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": true,
+          "max_depth": null,
           "notes": "Tree select dropdown for location"
         },
         {
@@ -62,6 +68,9 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": true,
+          "max_depth": null,
           "notes": "Specialization tree select dropdown"
         },
         {
@@ -73,6 +82,9 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
           "notes": "Salary range dropdown selector"
         },
         {
@@ -84,6 +96,9 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
+          "panel_search_selector": null,
+          "is_nested": null,
+          "max_depth": null,
           "notes": "Publish date dropdown selector"
         }
       ],

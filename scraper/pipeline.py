@@ -140,6 +140,131 @@ class SchemaValidationStage(PipelineStage):
         return context
 
 
+class FilterDiscoveryStage(PipelineStage):
+    """Enriches dropdown filter entries with nesting and search-input detection."""
+
+    def __init__(self, playwright_config):
+        self.playwright_config = playwright_config
+
+    async def process(self, context: GenerationContext) -> GenerationContext:
+        adapter = context.adapter
+        if not adapter or not adapter.listings.filters.available:
+            return context
+
+        from playwright.async_api import async_playwright
+        from .models import FilterMechanism
+
+        dropdown_entries = [
+            e for e in adapter.listings.filters.available
+            if e.mechanism == FilterMechanism.DROPDOWN and e.selector
+        ]
+        if not dropdown_entries:
+            return context
+
+        cfg = self.playwright_config
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                headless=cfg.headless,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            ctx = await browser.new_context(
+                user_agent=cfg.user_agent,
+                viewport={"width": cfg.viewport_width, "height": cfg.viewport_height},
+            )
+            try:
+                page = await ctx.new_page()
+                await page.goto(
+                    adapter.listings_url,
+                    wait_until="domcontentloaded",
+                    timeout=cfg.navigation_timeout_ms,
+                )
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8_000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(cfg.js_settle_ms)
+
+                for entry in dropdown_entries:
+                    try:
+                        # Install mutation observer
+                        await page.evaluate("""() => {
+                            window.__ddAdded = [];
+                            window.__ddObserver = new MutationObserver((mutations) => {
+                                for (const m of mutations) {
+                                    for (const node of m.addedNodes) {
+                                        if (node.nodeType === 1) window.__ddAdded.push(node);
+                                    }
+                                }
+                            });
+                            window.__ddObserver.observe(document.body, {
+                                childList: true, subtree: true
+                            });
+                        }""")
+
+                        # Click the dropdown trigger
+                        trigger = page.locator(entry.selector).first
+                        if not await trigger.is_visible(timeout=3_000):
+                            continue
+                        await trigger.click()
+                        await page.wait_for_timeout(500)
+
+                        # Detect nesting and search input
+                        nesting_info = await page.evaluate("""() => {
+                            if (window.__ddObserver) window.__ddObserver.disconnect();
+                            const panels = window.__ddAdded || [];
+                            let hasNesting = false;
+                            let hasSearch = false;
+                            let searchSelector = null;
+
+                            for (const panel of panels) {
+                                if (!panel.querySelectorAll) continue;
+                                const treeItems = panel.querySelectorAll(
+                                    '[role="treeitem"], [aria-expanded], .p-treenode, '
+                                    + '[class*="tree-node"], [class*="nested"], ul ul, ol ol'
+                                );
+                                if (treeItems.length > 0) hasNesting = true;
+
+                                const searchInput = panel.querySelector(
+                                    'input[type="search"], input[type="text"], '
+                                    + '[role="searchbox"], .p-treeselect-filter, '
+                                    + '.p-select-filter, '
+                                    + 'input[placeholder*="search" i], '
+                                    + 'input[placeholder*="filter" i]'
+                                );
+                                if (searchInput) {
+                                    hasSearch = true;
+                                    if (searchInput.id)
+                                        searchSelector = '#' + searchInput.id;
+                                    else if (searchInput.className &&
+                                             typeof searchInput.className === 'string')
+                                        searchSelector = '.' + searchInput.className.trim()
+                                            .split(/\\s+/).join('.');
+                                }
+                            }
+                            return { hasNesting, hasSearch, searchSelector };
+                        }""")
+
+                        if nesting_info:
+                            entry.is_nested = nesting_info.get("hasNesting", False) or None
+                            entry.panel_search_selector = nesting_info.get("searchSelector")
+
+                        # Close the dropdown
+                        await page.keyboard.press("Escape")
+                        await page.wait_for_timeout(300)
+
+                    except Exception as exc:
+                        logger.debug(
+                            "FilterDiscovery: failed for %s: %s", entry.selector, exc
+                        )
+                        continue
+
+                await page.close()
+            finally:
+                await browser.close()
+
+        return context
+
+
 class AdapterEnrichmentStage(PipelineStage):
     """Adds metadata and logs results."""
 
