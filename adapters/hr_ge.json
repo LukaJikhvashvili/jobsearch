@@ -7,13 +7,11 @@
     "fields": {
       "title": {
         "selector": ".title__text",
-        "attr": "text",
-        "confidence": 1.0
+        "attr": "text"
       },
       "company": {
         "selector": ".company__title",
-        "attr": "text",
-        "confidence": 1.0
+        "attr": "text"
       }
     },
     "pagination": {
@@ -29,7 +27,6 @@
       "link_selector": "a.title",
       "data_attribute": null,
       "click_container": false,
-      "confidence": 1.0,
       "notes": "Each job card contains a standard anchor tag with a direct URL to the announcement."
     },
     "filters": {
@@ -43,7 +40,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": null
         },
         {
@@ -55,7 +51,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 0.9,
           "notes": null
         },
         {
@@ -67,7 +62,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 0.9,
           "notes": null
         },
         {
@@ -79,7 +73,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": null
         },
         {
@@ -91,7 +84,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": null
         }
       ],
@@ -105,7 +97,6 @@
     "en"
   ],
   "requires_js": true,
-  "overall_confidence": 0.95,
   "generated_at": "2026-04-25T20:42:18.697264",
   "version": 1,
   "is_stale": false,
