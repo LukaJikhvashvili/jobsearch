@@ -10,6 +10,7 @@ attributes are visible to the LLM.
 """
 
 import logging
+import time
 from typing import Optional
 from playwright.async_api import async_playwright, BrowserContext, Page
 
@@ -17,6 +18,7 @@ from .config import PlaywrightConfig
 from .html_cleaner import clean_html
 from .models import SiteAdapter
 from .schema_generator import SchemaGenerator
+from .telemetry import TelemetryCollector
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ class SiteProfiler:
         js_settle_ms: int = _JS_SETTLE_MS,
         playwright_config: Optional[PlaywrightConfig] = None,
         event_bus=None,
+        telemetry: Optional[TelemetryCollector] = None,
     ):
         if playwright_config is not None:
             self._pw_config = playwright_config
@@ -46,31 +49,40 @@ class SiteProfiler:
         self.headless = self._pw_config.headless
         self.js_settle_ms = self._pw_config.js_settle_ms
         self.event_bus = event_bus
+        self.telemetry = telemetry
 
     async def profile(self, site: str, listings_url: str) -> SiteAdapter:
         cfg = self._pw_config
         if self.event_bus:
             await self.event_bus.publish("adapter_generation_started", site=site, url=listings_url)
 
-        async with async_playwright() as pw:
-            browser = await pw.chromium.launch(
-                headless=cfg.headless,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
-            )
-            context = await browser.new_context(
-                user_agent=cfg.user_agent,
-                viewport={"width": cfg.viewport_width, "height": cfg.viewport_height},
-                locale="en-US",
-            )
-            try:
-                adapter = await self._capture_and_generate(context, site, listings_url)
-            finally:
-                await browser.close()
+        start = time.time()
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(
+                    headless=cfg.headless,
+                    args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
+                )
+                context = await browser.new_context(
+                    user_agent=cfg.user_agent,
+                    viewport={"width": cfg.viewport_width, "height": cfg.viewport_height},
+                    locale="en-US",
+                )
+                try:
+                    adapter = await self._capture_and_generate(context, site, listings_url)
+                finally:
+                    await browser.close()
 
-        if self.event_bus:
-            await self.event_bus.publish("adapter_generation_completed", site=site)
+            if self.event_bus:
+                await self.event_bus.publish("adapter_generation_completed", site=site)
 
-        return adapter
+            if self.telemetry:
+                self.telemetry.track_adapter_generation(site, time.time() - start, success=True)
+            return adapter
+        except Exception as exc:
+            if self.telemetry:
+                self.telemetry.track_adapter_generation(site, time.time() - start, success=False, error=str(exc))
+            raise
 
     async def _capture_and_generate(self, context: BrowserContext, site: str, listings_url: str) -> SiteAdapter:
         cfg = self._pw_config

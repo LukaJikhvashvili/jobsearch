@@ -24,6 +24,7 @@ from scraper import (
     SiteProfiler,
     ScraperConfig,
     ScraperContainer,
+    TelemetryCollector,
 )
 from scraper.events import Events
 from scraper.models import UserFilters
@@ -38,6 +39,18 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(messa
 config = ScraperConfig.from_env()
 container = ScraperContainer(config)
 store = container.get_adapter_store()
+
+# ---------------------------------------------------------------------------
+# Telemetry setup
+# ---------------------------------------------------------------------------
+
+telemetry = TelemetryCollector()
+
+# Optional: register a callback for real-time span logging
+telemetry.on_span(lambda span: print(
+    f"  [telemetry] {span.operation}  {span.site}  "
+    f"{'OK' if span.success else 'FAIL'}  {span.duration_s:.2f}s"
+))
 
 # Subscribe to events for logging
 container.event_bus.subscribe(
@@ -86,7 +99,7 @@ def _make_generator() -> SchemaGenerator:
 async def generate_adapter_legacy(site_name: str, listings_url: str) -> None:
     """Legacy workflow — still fully supported."""
     print(f"\n── Profiling {site_name} (legacy) ──")
-    profiler = SiteProfiler(generator=_make_generator(), headless=False)
+    profiler = SiteProfiler(generator=_make_generator(), headless=False, telemetry=telemetry)
     adapter = await profiler.profile(site_name, listings_url)
     store.save(adapter)
     print(f"  Saved → adapters/{site_name}.json")
@@ -156,6 +169,15 @@ async def main():
 
     print(f"\n{'─'*60}")
     print(f"Total: {len(all_jobs)} jobs")
+
+    # Print telemetry summary
+    summary = telemetry.get_summary()
+    print(f"\n── Telemetry Summary ──")
+    print(f"  Operations: {summary['total_spans']}  "
+          f"Failed: {summary['failed_spans']}  "
+          f"Success rate: {summary['success_rate']:.0%}")
+    for name, total in summary['metric_totals'].items():
+        print(f"  {name}: {total}")
 
 
 if __name__ == "__main__":

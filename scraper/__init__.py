@@ -9,6 +9,16 @@ from .events import EventBus, Events
 from .pipeline import AdapterGenerationPipeline, GenerationContext, PipelineStage
 from .cache import ScraperCache
 from .retry import retry, retry_sync
+from .extractors import (
+    FieldExtractor,
+    ExtractorPipeline,
+    CoreFieldExtractor,
+    SalaryExtractor,
+    LocationExtractor,
+    PostedDateExtractor,
+    GenericFieldExtractor,
+)
+from .telemetry import TelemetryCollector, get_telemetry, SpanRecord, MetricEvent
 
 __all__ = [
     "AdapterStore",
@@ -29,4 +39,15 @@ __all__ = [
     "retry",
     "retry_sync",
     "RetryConfig",
+    "FieldExtractor",
+    "ExtractorPipeline",
+    "CoreFieldExtractor",
+    "SalaryExtractor",
+    "LocationExtractor",
+    "PostedDateExtractor",
+    "GenericFieldExtractor",
+    "TelemetryCollector",
+    "get_telemetry",
+    "SpanRecord",
+    "MetricEvent",
 ]

@@ -12,10 +12,13 @@ Flow:
 """
 
 import logging
+import time
 from typing import AsyncIterator, Optional
 from urllib.parse import urljoin, urlparse, urlencode, parse_qs, urlunparse
 
 from .config import PlaywrightConfig
+from .extractors import ExtractorPipeline, _extract_field
+from .telemetry import TelemetryCollector
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -43,33 +46,6 @@ from .filter_match import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Field extraction
-# ---------------------------------------------------------------------------
-
-
-def _extract(soup: BeautifulSoup, field: Optional[FieldSelector], base_url: str = "") -> Optional[str]:
-    if field is None or not field.selector:
-        return None
-    el = soup.select_one(field.selector)
-    if el is None:
-        return None
-    attr = field.attr
-    if attr == AttrType.TEXT:
-        return el.get_text(separator=" ", strip=True) or None
-    elif attr == AttrType.HTML:
-        return str(el) or None
-    elif attr == AttrType.HREF:
-        href = el.get("href", "")
-        return urljoin(base_url, href) if href else None
-    elif attr == AttrType.SRC:
-        src = el.get("src", "")
-        return urljoin(base_url, src) if src else None
-    elif attr == AttrType.VALUE:
-        return el.get("value") or el.get_text(strip=True) or None
-    return None
-
-
-# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -81,6 +57,8 @@ class ScraperRunner:
         headless: bool = True,
         playwright_config: Optional[PlaywrightConfig] = None,
         event_bus=None,
+        extractor_pipeline: Optional[ExtractorPipeline] = None,
+        telemetry: Optional[TelemetryCollector] = None,
     ):
         self.adapter = adapter
         if playwright_config is not None:
@@ -89,6 +67,8 @@ class ScraperRunner:
             self._pw_config = PlaywrightConfig(headless=headless)
         self.headless = self._pw_config.headless
         self.event_bus = event_bus
+        self.extractor_pipeline = extractor_pipeline if extractor_pipeline is not None else ExtractorPipeline()
+        self.telemetry = telemetry
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
@@ -183,7 +163,12 @@ class ScraperRunner:
         # that don't go through the UrlParamPagination card-ID tracker.
         seen_urls: set[str] = set()
 
+        total_jobs = 0
+        total_pages = 0
+        scrape_start = time.time()
+
         async for current_page in strategy.pages(page, page.url):
+            total_pages += 1
             html = await current_page.content()
             soup = BeautifulSoup(html, "lxml")
             cards = soup.select(adapter.listings.container)
@@ -198,7 +183,9 @@ class ScraperRunner:
 
             logger.info("%d cards on %s", len(cards), current_page.url)
 
-            fields = adapter.listings.fields
+            if self.telemetry:
+                self.telemetry.track_page_scraped(adapter.site, total_pages, len(cards))
+
             nav = adapter.listings.navigation
 
             for i, card in enumerate(cards):
@@ -215,16 +202,22 @@ class ScraperRunner:
                         continue
                     seen_urls.add(url)
 
+                extracted = self.extractor_pipeline.extract_all(card, adapter, adapter.base_url)
+                total_jobs += 1
                 yield JobListing(
                     site=adapter.site,
-                    title=_extract(card, fields.get("title")),
-                    company=_extract(card, fields.get("company")),
                     url=url,
                     adapter_version=adapter.version,
+                    **{k: v for k, v in extracted.items() if k in JobListing.model_fields},
                 )
 
             if self.event_bus:
                 await self.event_bus.publish("scraping_page_completed", site=adapter.site, url=current_page.url)
+
+        if self.telemetry:
+            self.telemetry.track_scraping_complete(
+                adapter.site, total_jobs, total_pages, time.time() - scrape_start
+            )
 
         if self.event_bus:
             await self.event_bus.publish("scraping_completed", site=adapter.site)
@@ -290,12 +283,24 @@ class ScraperRunner:
                     logger.info("Filter applied: %s=%s (%s)", entry.dimension, value, entry.mechanism)
                     if self.event_bus:
                         await self.event_bus.publish("filter_applied", dimension=entry.dimension, value=value)
+                    if self.telemetry:
+                        self.telemetry.track_filter_applied(
+                            self.adapter.site, entry.dimension.value, entry.mechanism.value, success=True
+                        )
                 else:
                     logger.warning("Filter not applied (no match): %s=%s", entry.dimension, value)
+                    if self.telemetry:
+                        self.telemetry.track_filter_applied(
+                            self.adapter.site, entry.dimension.value, entry.mechanism.value, success=False
+                        )
             except Exception as exc:
                 logger.warning("Filter error: %s=%s — %s", entry.dimension, value, exc)
                 if self.event_bus:
                     await self.event_bus.publish("filter_failed", dimension=entry.dimension, error=str(exc))
+                if self.telemetry:
+                    self.telemetry.track_filter_applied(
+                        self.adapter.site, entry.dimension.value, entry.mechanism.value, success=False
+                    )
 
         if not applied_any:
             return

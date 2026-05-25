@@ -15,12 +15,14 @@ import json
 import logging
 import os
 import re
+import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
 
 from .models import SiteAdapter
+from .telemetry import TelemetryCollector
 
 logger = logging.getLogger(__name__)
 
@@ -343,10 +345,11 @@ def _build_adapter(data: dict, site: str, listings_url: str) -> SiteAdapter:
 
 
 class SchemaGenerator:
-    def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None, event_bus=None):
+    def __init__(self, primary: AIProvider, fallback: Optional[AIProvider] = None, event_bus=None, telemetry: Optional[TelemetryCollector] = None):
         self.primary = primary
         self.fallback = fallback
         self.event_bus = event_bus
+        self.telemetry = telemetry
 
     def generate(self, site: str, listings_url: str, listings_html: str) -> SiteAdapter:
         """
@@ -376,6 +379,7 @@ class SchemaGenerator:
         providers = [p for p in (self.primary, self.fallback) if p is not None]
         last_error: Exception = RuntimeError("No providers configured")
         for provider in providers:
+            start = time.time()
             try:
                 if self.event_bus:
                     import asyncio
@@ -391,6 +395,9 @@ class SchemaGenerator:
                 logger.info("Generating schema  site=%s  provider=%s", site, provider.name)
                 result = provider.generate(system, user)
 
+                if self.telemetry:
+                    self.telemetry.track_llm_call(site, provider.name, time.time() - start, success=True)
+
                 if self.event_bus:
                     try:
                         loop = asyncio.get_running_loop()
@@ -401,6 +408,9 @@ class SchemaGenerator:
 
                 return result
             except Exception as exc:
+                if self.telemetry:
+                    self.telemetry.track_llm_call(site, provider.name, time.time() - start, success=False, error=str(exc))
+
                 logger.warning("%s failed for %s: %s", provider.name, site, exc)
                 last_error = exc
 
