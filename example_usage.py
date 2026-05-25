@@ -4,6 +4,10 @@ example_usage.py — three workflows:
   1. Profile a new site (two-phase: listings → detail)
   2. Scrape jobs using a saved adapter
   3. Auto-refresh stale adapters
+
+Demonstrates both:
+  - Legacy direct instantiation (backward-compatible)
+  - New container-based approach (recommended)
 """
 
 import asyncio
@@ -21,35 +25,45 @@ from scraper import (
     ScraperRunner,
     SchemaGenerator,
     SiteProfiler,
+    ScraperConfig,
+    ScraperContainer,
 )
+from scraper.events import Events
 from scraper.models import UserFilters
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 
-store = AdapterStore(directory=Path("adapters"))
+# ---------------------------------------------------------------------------
+# Container-based setup (recommended)
+# ---------------------------------------------------------------------------
 
+config = ScraperConfig.from_env()
+container = ScraperContainer(config)
+store = container.get_adapter_store()
 
-def _make_generator() -> SchemaGenerator:
-    gemini_key = os.environ["GEMINI_API_KEY"]
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    return SchemaGenerator(
-        primary=GeminiProvider(api_key=gemini_key),  # model from GEMINI_MODEL env var
-        fallback=ClaudeProvider(api_key=anthropic_key) if anthropic_key else None,
-    )
+# Subscribe to events for logging
+container.event_bus.subscribe(
+    Events.ADAPTER_GENERATION_COMPLETED,
+    lambda event_type, data: print(f"  Adapter generated in {data.get('duration', 0):.1f}s"),
+)
+container.event_bus.subscribe(
+    Events.SCRAPING_PAGE_COMPLETED,
+    lambda event_type, data: print(f"  Page scraped: {data.get('url', '?')}"),
+)
 
 
 # ---------------------------------------------------------------------------
-# Workflow 1: Generate a new adapter (two-phase)
+# Workflow 1: Generate a new adapter (pipeline-based)
 # ---------------------------------------------------------------------------
 
 
 async def generate_adapter(site_name: str, listings_url: str) -> None:
     print(f"\n── Profiling {site_name} ──")
-    print("  Phase 1: analysing listings page …")
+    print("  Generating adapter via pipeline …")
 
-    profiler = SiteProfiler(generator=_make_generator(), headless=False)
-    adapter = await profiler.profile(site_name, listings_url)
+    pipeline = container.get_pipeline()
+    adapter = await pipeline.execute(site_name, listings_url)
 
     print(f"  Nav type:     {adapter.listings.navigation.type}")
     print(f"  Pagination:   {adapter.listings.pagination.type}")
@@ -58,7 +72,31 @@ async def generate_adapter(site_name: str, listings_url: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Workflow 2: Scrape jobs
+# Workflow 1b: Legacy direct instantiation (still works)
+# ---------------------------------------------------------------------------
+
+
+def _make_generator() -> SchemaGenerator:
+    """Legacy helper — direct instantiation without container."""
+    gemini_key = os.environ["GEMINI_API_KEY"]
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    return SchemaGenerator(
+        primary=GeminiProvider(api_key=gemini_key),
+        fallback=ClaudeProvider(api_key=anthropic_key) if anthropic_key else None,
+    )
+
+
+async def generate_adapter_legacy(site_name: str, listings_url: str) -> None:
+    """Legacy workflow — still fully supported."""
+    print(f"\n── Profiling {site_name} (legacy) ──")
+    profiler = SiteProfiler(generator=_make_generator(), headless=False)
+    adapter = await profiler.profile(site_name, listings_url)
+    store.save(adapter)
+    print(f"  Saved → adapters/{site_name}.json")
+
+
+# ---------------------------------------------------------------------------
+# Workflow 2: Scrape jobs (container-based)
 # ---------------------------------------------------------------------------
 
 
@@ -72,7 +110,8 @@ async def scrape_jobs(site_name: str, filters: UserFilters = None) -> list[JobLi
     jobs: list[JobListing] = []
     print(f"\n── Scraping {site_name} ──")
 
-    async with ScraperRunner(adapter, headless=False) as runner:
+    runner = container.get_runner(adapter)
+    async with runner:
         async for job in runner.run(filters=filters):
             jobs.append(job)
             print(f"  [{len(jobs):>3}] {job.title or '?':<45} " f"{job.company or '?':<25} ")
