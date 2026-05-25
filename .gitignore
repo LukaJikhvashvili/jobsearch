@@ -3,6 +3,9 @@
 __pycache__/
 *.ipynb
 
+.env
 .env*
+
 GEMINI.md
+
 TODO
