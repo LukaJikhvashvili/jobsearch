@@ -7,13 +7,11 @@
     "fields": {
       "title": {
         "selector": "td:nth-child(2) a.vip",
-        "attr": "text",
-        "confidence": 1.0
+        "attr": "text"
       },
       "company": {
         "selector": "td:nth-child(4)",
-        "attr": "text",
-        "confidence": 0.9
+        "attr": "text"
       }
     },
     "pagination": {
@@ -29,7 +27,6 @@
       "link_selector": "td:nth-child(2) a.vip",
       "data_attribute": null,
       "click_container": false,
-      "confidence": 1.0,
       "notes": "The job title link points directly to the job details page."
     },
     "filters": {
@@ -43,7 +40,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": null
         },
         {
@@ -55,7 +51,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": null
         },
         {
@@ -67,7 +62,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": null
         },
         {
@@ -79,7 +73,6 @@
           "item_selector": null,
           "date_from_selector": null,
           "date_to_selector": null,
-          "confidence": 1.0,
           "notes": "Checkbox for 'Only with salary'"
         }
       ],
@@ -93,7 +86,6 @@
     "en"
   ],
   "requires_js": false,
-  "overall_confidence": 0.95,
   "generated_at": "2026-04-25T20:30:41.973388",
   "version": 1,
   "is_stale": false,

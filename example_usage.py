@@ -53,11 +53,6 @@ async def generate_adapter(site_name: str, listings_url: str) -> None:
 
     print(f"  Nav type:     {adapter.listings.navigation.type}")
     print(f"  Pagination:   {adapter.listings.pagination.type}")
-    print(f"  Confidence:   {adapter.overall_confidence:.0%}")
-
-    if adapter.overall_confidence < 0.60:
-        print("  ⚠  Low confidence — review before using in production")
-
     store.save(adapter)
     print(f"  Saved → adapters/{site_name}.json")
 
